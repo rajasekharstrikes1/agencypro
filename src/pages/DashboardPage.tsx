@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import ClientDashboard from './Dashboard/ClientDashboard';
-import AgencyDashboard from '../components/Dashboard/AgencyDashboard';
+import AgencyDashboard from './Dashboard/AgencyDashboard';
 
 const DashboardPage: React.FC = () => {
   const { userProfile, loading } = useAuth();
