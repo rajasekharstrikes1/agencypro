@@ -59,16 +59,22 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isRole(UserRole.SUPER_ADMIN)) {
       items.push(
         {
-          name: 'Tenant Management',
+          name: 'Agencies',
           href: '/admin/tenants',
           icon: Building2,
           permission: Permission.MANAGE_ALL_TENANTS
         },
         {
-          name: 'User Management',
+          name: 'Users',
           href: '/admin/users',
           icon: UserCog,
           permission: Permission.MANAGE_TENANT_USERS
+        },
+        {
+          name: 'Subscription Plans',
+          href: '/admin/subscription-plans',
+          icon: CreditCard,
+          permission: Permission.MANAGE_SUBSCRIPTIONS
         }
       );
     } else {

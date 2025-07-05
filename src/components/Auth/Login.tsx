@@ -16,17 +16,12 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // --- DEBUGGING LINES ADDED HERE ---
-    console.log("Email being sent:", `"${email}"`);
-    console.log("Password being sent:", `"${password}"`);
-    // ------------------------------------
-    
     try {
       setError('');
       setLoading(true);
       await login(email, password);
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       setError('Failed to log in. Please check your credentials.');
       console.error('Login error:', error);
     } finally {
@@ -183,12 +178,12 @@ const Login: React.FC = () => {
 
               <div className="text-center">
                 <p className="text-sm text-gray-600">
-                  Don't have an account?{' '}
+                  Don't have an agency account?{' '}
                   <Link
-                    to="/register"
+                    to="/register-agency"
                     className="font-medium text-accent hover:text-primary transition-colors"
                   >
-                    Contact your administrator
+                    Register your agency
                   </Link>
                 </p>
               </div>

@@ -274,16 +274,6 @@ export interface SuperAdminAnalytics {
   lastUpdated: Timestamp;
 }
 
-// Auth Context Type
-export interface AuthContextType {
-  userProfile: UserProfile | null;
-  loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  isAuthenticated: boolean;
-  hasPermission: (permission: Permission) => boolean;
-}
-
 // Role-based permission mappings
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   [UserRole.SUPER_ADMIN]: [
