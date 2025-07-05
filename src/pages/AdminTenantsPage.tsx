@@ -1,27 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
-import { Tenant, Permission } from '../types';
-import { Plus, Edit, Trash2, Building2, Shield, Users } from 'lucide-react';
+import { Tenant, Permission, Subscription, SubscriptionStatus } from '../types';
+import { Plus, Edit, Trash2, Building2, Shield, Users, Search, ToggleLeft, ToggleRight, Pause } from 'lucide-react';
 
 const AdminTenantsPage: React.FC = () => {
   const { userProfile, hasPermission } = useAuth();
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all');
   const [formData, setFormData] = useState({
     name: '',
     domain: '',
     isActive: true,
     allowedModules: ['leads', 'invoices'] as ('leads' | 'invoices')[],
-    maxUsers: 10
+    maxUsers: 10,
+    contactEmail: '',
+    contactPhone: '',
+    address: ''
   });
 
   useEffect(() => {
-    if (hasPermission(Permission.MANAGE_TENANTS)) {
+    if (hasPermission(Permission.MANAGE_ALL_TENANTS)) {
       fetchTenants();
+      fetchSubscriptions();
     }
   }, [hasPermission]);
 
@@ -41,6 +48,20 @@ const AdminTenantsPage: React.FC = () => {
     }
   };
 
+  const fetchSubscriptions = async () => {
+    try {
+      const subscriptionsRef = collection(db, 'subscriptions');
+      const querySnapshot = await getDocs(subscriptionsRef);
+      const subscriptionsList = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Subscription[];
+      setSubscriptions(subscriptionsList);
+    } catch (error) {
+      console.error('Error fetching subscriptions:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -49,6 +70,11 @@ const AdminTenantsPage: React.FC = () => {
         settings: {
           allowedModules: formData.allowedModules,
           maxUsers: formData.maxUsers
+        },
+        contactInfo: {
+          email: formData.contactEmail,
+          phone: formData.contactPhone,
+          address: formData.address
         },
         createdBy: userProfile?.uid,
         updatedAt: new Date()
@@ -77,18 +103,62 @@ const AdminTenantsPage: React.FC = () => {
       domain: tenant.domain || '',
       isActive: tenant.isActive,
       allowedModules: tenant.settings?.allowedModules || ['leads', 'invoices'],
-      maxUsers: tenant.settings?.maxUsers || 10
+      maxUsers: tenant.settings?.maxUsers || 10,
+      contactEmail: tenant.contactInfo?.email || '',
+      contactPhone: tenant.contactInfo?.phone || '',
+      address: tenant.contactInfo?.address || ''
     });
     setShowForm(true);
   };
 
   const handleDelete = async (tenantId: string) => {
-    if (window.confirm('Are you sure you want to delete this tenant? This will affect all associated users and data.')) {
+    if (window.confirm('Are you sure you want to delete this agency? This will affect all associated users and data.')) {
       try {
         await deleteDoc(doc(db, 'tenants', tenantId));
         setTenants(tenants.filter(tenant => tenant.id !== tenantId));
       } catch (error) {
         console.error('Error deleting tenant:', error);
+      }
+    }
+  };
+
+  const handleToggleStatus = async (tenant: Tenant) => {
+    try {
+      await updateDoc(doc(db, 'tenants', tenant.id!), {
+        isActive: !tenant.isActive,
+        updatedAt: new Date()
+      });
+      setTenants(tenants.map(t => 
+        t.id === tenant.id ? { ...t, isActive: !t.isActive } : t
+      ));
+    } catch (error) {
+      console.error('Error updating tenant status:', error);
+    }
+  };
+
+  const handleSuspendTenant = async (tenant: Tenant) => {
+    if (window.confirm('Are you sure you want to suspend this agency? They will lose access immediately.')) {
+      try {
+        // Update tenant status
+        await updateDoc(doc(db, 'tenants', tenant.id!), {
+          isActive: false,
+          suspendedAt: new Date(),
+          updatedAt: new Date()
+        });
+
+        // Update subscription status if exists
+        const tenantSubscription = subscriptions.find(s => s.tenantId === tenant.id);
+        if (tenantSubscription) {
+          await updateDoc(doc(db, 'subscriptions', tenantSubscription.id!), {
+            status: SubscriptionStatus.SUSPENDED,
+            updatedAt: new Date()
+          });
+        }
+
+        await fetchTenants();
+        await fetchSubscriptions();
+      } catch (error) {
+        console.error('Error suspending tenant:', error);
       }
     }
   };
@@ -101,7 +171,10 @@ const AdminTenantsPage: React.FC = () => {
       domain: '',
       isActive: true,
       allowedModules: ['leads', 'invoices'],
-      maxUsers: 10
+      maxUsers: 10,
+      contactEmail: '',
+      contactPhone: '',
+      address: ''
     });
   };
 
@@ -114,12 +187,35 @@ const AdminTenantsPage: React.FC = () => {
     }));
   };
 
-  if (!hasPermission(Permission.MANAGE_TENANTS)) {
+  const getSubscriptionStatus = (tenantId: string) => {
+    const subscription = subscriptions.find(s => s.tenantId === tenantId);
+    return subscription?.status || 'none';
+  };
+
+  const getSubscriptionPlan = (tenantId: string) => {
+    const subscription = subscriptions.find(s => s.tenantId === tenantId);
+    return subscription?.plan || 'none';
+  };
+
+  const filteredTenants = tenants.filter(tenant => {
+    const matchesSearch = searchTerm === '' ||
+      tenant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      tenant.contactInfo?.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = filterStatus === 'all' ||
+      (filterStatus === 'active' && tenant.isActive) ||
+      (filterStatus === 'inactive' && !tenant.isActive) ||
+      (filterStatus === 'suspended' && getSubscriptionStatus(tenant.id!) === SubscriptionStatus.SUSPENDED);
+
+    return matchesSearch && matchesStatus;
+  });
+
+  if (!hasPermission(Permission.MANAGE_ALL_TENANTS)) {
     return (
       <div className="text-center py-12">
         <Shield className="mx-auto h-12 w-12 text-red-400" />
         <h3 className="mt-2 text-sm font-medium text-gray-900">Access Denied</h3>
-        <p className="mt-1 text-sm text-gray-500">You don't have permission to manage tenants.</p>
+        <p className="mt-1 text-sm text-gray-500">You don't have permission to manage agencies.</p>
       </div>
     );
   }
@@ -136,28 +232,69 @@ const AdminTenantsPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Tenant Management</h1>
-          <p className="text-gray-600">Manage client tenants and their configurations</p>
+          <h1 className="text-2xl font-bold text-gray-900">Agency Management</h1>
+          <p className="text-gray-600">Manage client agencies and their configurations</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
           className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-colors"
         >
           <Plus className="w-4 h-4 mr-2" />
-          Add Tenant
+          Add Agency
         </button>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white p-4 rounded-lg shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
+              Search Agencies
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                id="search"
+                placeholder="Search by name or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <label htmlFor="filterStatus" className="block text-sm font-medium text-gray-700 mb-1">
+              Filter by Status
+            </label>
+            <select
+              id="filterStatus"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+            >
+              <option value="all">All Agencies</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {showForm && (
         <div className="bg-white shadow-lg rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">
-            {editingTenant ? 'Edit Tenant' : 'Add New Tenant'}
+            {editingTenant ? 'Edit Agency' : 'Add New Agency'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tenant Name *
+                  Agency Name *
                 </label>
                 <input
                   type="text"
@@ -178,6 +315,29 @@ const AdminTenantsPage: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                   placeholder="e.g., bigc.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Contact Email *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={formData.contactEmail}
+                  onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Contact Phone
+                </label>
+                <input
+                  type="tel"
+                  value={formData.contactPhone}
+                  onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
                 />
               </div>
               <div>
@@ -204,6 +364,18 @@ const AdminTenantsPage: React.FC = () => {
                   Active
                 </label>
               </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Address
+              </label>
+              <textarea
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+              />
             </div>
             
             <div>
@@ -250,82 +422,139 @@ const AdminTenantsPage: React.FC = () => {
                 type="submit"
                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-colors"
               >
-                {editingTenant ? 'Update' : 'Create'} Tenant
+                {editingTenant ? 'Update' : 'Create'} Agency
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Tenants Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tenants.map((tenant) => (
-          <div key={tenant.id} className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center">
-                <div className="bg-primary p-2 rounded-lg">
-                  <Building2 className="h-6 w-6 text-white" />
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-lg font-medium text-gray-900">{tenant.name}</h3>
-                  {tenant.domain && (
-                    <p className="text-sm text-gray-500">{tenant.domain}</p>
-                  )}
-                </div>
-              </div>
-              <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                tenant.isActive
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {tenant.isActive ? 'Active' : 'Inactive'}
-              </span>
-            </div>
-            
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center text-sm text-gray-600">
-                <Users className="h-4 w-4 mr-2" />
-                Max Users: {tenant.settings?.maxUsers || 'Unlimited'}
-              </div>
-              <div className="text-sm text-gray-600">
-                <strong>Modules:</strong> {tenant.settings?.allowedModules?.join(', ') || 'All'}
-              </div>
-            </div>
-            
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => handleEdit(tenant)}
-                className="inline-flex items-center p-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-colors"
-              >
-                <Edit className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => handleDelete(tenant.id!)}
-                className="inline-flex items-center p-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {tenants.length === 0 && (
-        <div className="text-center py-12">
-          <Building2 className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-2 text-sm font-medium text-gray-900">No tenants</h3>
-          <p className="mt-1 text-sm text-gray-500">Get started by creating your first client tenant.</p>
-          <div className="mt-6">
-            <button
-              onClick={() => setShowForm(true)}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-primary hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent transition-colors"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Tenant
-            </button>
-          </div>
+      {/* Agencies Table */}
+      <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Agency
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Contact
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Subscription
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Created
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredTenants.map((tenant) => (
+                <tr key={tenant.id}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center">
+                      <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
+                        <Building2 className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="ml-4">
+                        <div className="text-sm font-medium text-gray-900">{tenant.name}</div>
+                        <div className="text-sm text-gray-500">{tenant.domain || 'No domain'}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">{tenant.contactInfo?.email}</div>
+                    <div className="text-sm text-gray-500">{tenant.contactInfo?.phone || 'No phone'}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900 capitalize">{getSubscriptionPlan(tenant.id!)}</div>
+                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                      getSubscriptionStatus(tenant.id!) === SubscriptionStatus.ACTIVE
+                        ? 'bg-green-100 text-green-800'
+                        : getSubscriptionStatus(tenant.id!) === SubscriptionStatus.TRIAL
+                        ? 'bg-blue-100 text-blue-800'
+                        : getSubscriptionStatus(tenant.id!) === SubscriptionStatus.SUSPENDED
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {getSubscriptionStatus(tenant.id!)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button
+                      onClick={() => handleToggleStatus(tenant)}
+                      className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full transition-colors ${
+                        tenant.isActive
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                          : 'bg-red-100 text-red-800 hover:bg-red-200'
+                      }`}
+                    >
+                      {tenant.isActive ? (
+                        <>
+                          <ToggleRight className="w-3 h-3 mr-1" />
+                          Active
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-3 h-3 mr-1" />
+                          Inactive
+                        </>
+                      )}
+                    </button>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {tenant.createdAt.toDate().toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="flex items-center justify-end space-x-2">
+                      <button
+                        onClick={() => handleEdit(tenant)}
+                        className="text-accent hover:text-primary transition-colors"
+                        title="Edit agency"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleSuspendTenant(tenant)}
+                        className="text-yellow-600 hover:text-yellow-900 transition-colors"
+                        title="Suspend agency"
+                      >
+                        <Pause className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(tenant.id!)}
+                        className="text-red-600 hover:text-red-900 transition-colors"
+                        title="Delete agency"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+        
+        {filteredTenants.length === 0 && (
+          <div className="text-center py-12">
+            <Building2 className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No agencies found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {searchTerm || filterStatus !== 'all'
+                ? 'Try adjusting your search filters.'
+                : 'Get started by adding your first client agency.'}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

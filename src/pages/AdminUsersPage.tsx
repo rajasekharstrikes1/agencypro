@@ -3,20 +3,21 @@ import { collection, getDocs, updateDoc, deleteDoc, doc, query, where } from 'fi
 import { db } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
 import { UserProfile, UserRole, Tenant, Permission } from '../types';
-import { Plus, Edit, Trash2, Users, Shield, Building2, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Shield, Building2, Search, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const AdminUsersPage: React.FC = () => {
-  const { userProfile, hasPermission } = useAuth();
+  const { userProfile, hasPermission, isRole } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<UserRole | ''>('');
   const [filterTenant, setFilterTenant] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
 
   useEffect(() => {
-    if (hasPermission(Permission.MANAGE_USERS)) {
+    if (hasPermission(Permission.MANAGE_TENANT_USERS) || hasPermission(Permission.MANAGE_ALL_TENANTS)) {
       fetchUsers();
       fetchTenants();
     }
@@ -25,7 +26,14 @@ const AdminUsersPage: React.FC = () => {
   const fetchUsers = async () => {
     try {
       const usersRef = collection(db, 'users');
-      const querySnapshot = await getDocs(usersRef);
+      let usersQuery = usersRef;
+
+      // If not super admin, filter by tenant
+      if (!isRole(UserRole.SUPER_ADMIN) && userProfile?.tenantId) {
+        usersQuery = query(usersRef, where('tenantId', '==', userProfile.tenantId));
+      }
+
+      const querySnapshot = await getDocs(usersQuery);
       const usersList = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -89,12 +97,16 @@ const AdminUsersPage: React.FC = () => {
     switch (role) {
       case UserRole.SUPER_ADMIN:
         return 'bg-purple-100 text-purple-800';
-      case UserRole.ADMIN:
+      case UserRole.TENANT_ADMIN:
         return 'bg-blue-100 text-blue-800';
+      case UserRole.ADMIN:
+        return 'bg-indigo-100 text-indigo-800';
       case UserRole.EMPLOYEE:
         return 'bg-green-100 text-green-800';
       case UserRole.CLIENT:
         return 'bg-orange-100 text-orange-800';
+      case UserRole.CLIENT_USER:
+        return 'bg-yellow-100 text-yellow-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -106,12 +118,17 @@ const AdminUsersPage: React.FC = () => {
       user.email.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesRole = filterRole === '' || user.role === filterRole;
-    const matchesTenant = filterTenant === '' || user.tenantId === filterTenant;
+    const matchesTenant = filterTenant === '' || 
+      (filterTenant === 'no-tenant' && !user.tenantId) ||
+      user.tenantId === filterTenant;
+    const matchesStatus = filterStatus === 'all' ||
+      (filterStatus === 'active' && user.isActive) ||
+      (filterStatus === 'inactive' && !user.isActive);
 
-    return matchesSearch && matchesRole && matchesTenant;
+    return matchesSearch && matchesRole && matchesTenant && matchesStatus;
   });
 
-  if (!hasPermission(Permission.MANAGE_USERS)) {
+  if (!hasPermission(Permission.MANAGE_TENANT_USERS) && !hasPermission(Permission.MANAGE_ALL_TENANTS)) {
     return (
       <div className="text-center py-12">
         <Shield className="mx-auto h-12 w-12 text-red-400" />
@@ -147,7 +164,7 @@ const AdminUsersPage: React.FC = () => {
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-1">
               Search Users
@@ -178,16 +195,18 @@ const AdminUsersPage: React.FC = () => {
               className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
             >
               <option value="">All Roles</option>
-              <option value={UserRole.SUPER_ADMIN}>Super Admin</option>
+              {isRole(UserRole.SUPER_ADMIN) && <option value={UserRole.SUPER_ADMIN}>Super Admin</option>}
+              <option value={UserRole.TENANT_ADMIN}>Tenant Admin</option>
               <option value={UserRole.ADMIN}>Admin</option>
               <option value={UserRole.EMPLOYEE}>Employee</option>
               <option value={UserRole.CLIENT}>Client</option>
+              <option value={UserRole.CLIENT_USER}>Client User</option>
             </select>
           </div>
           
           <div>
             <label htmlFor="filterTenant" className="block text-sm font-medium text-gray-700 mb-1">
-              Filter by Tenant
+              Filter by Agency
             </label>
             <select
               id="filterTenant"
@@ -195,13 +214,29 @@ const AdminUsersPage: React.FC = () => {
               onChange={(e) => setFilterTenant(e.target.value)}
               className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
             >
-              <option value="">All Tenants</option>
-              <option value="no-tenant">No Tenant (Agency)</option>
+              <option value="">All Agencies</option>
+              <option value="no-tenant">No Agency (System)</option>
               {tenants.map(tenant => (
                 <option key={tenant.id} value={tenant.id}>
                   {tenant.name}
                 </option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="filterStatus" className="block text-sm font-medium text-gray-700 mb-1">
+              Filter by Status
+            </label>
+            <select
+              id="filterStatus"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as any)}
+              className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent"
+            >
+              <option value="all">All Status</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
             </select>
           </div>
         </div>
@@ -220,7 +255,7 @@ const AdminUsersPage: React.FC = () => {
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tenant
+                  Agency
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
@@ -263,13 +298,24 @@ const AdminUsersPage: React.FC = () => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button
                       onClick={() => handleToggleActive(user.id!, user.isActive)}
-                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                      disabled={user.role === UserRole.SUPER_ADMIN}
+                      className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full transition-colors ${
                         user.isActive
                           ? 'bg-green-100 text-green-800 hover:bg-green-200'
                           : 'bg-red-100 text-red-800 hover:bg-red-200'
-                      } transition-colors`}
+                      } ${user.role === UserRole.SUPER_ADMIN ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      {user.isActive ? 'Active' : 'Inactive'}
+                      {user.isActive ? (
+                        <>
+                          <ToggleRight className="w-3 h-3 mr-1" />
+                          Active
+                        </>
+                      ) : (
+                        <>
+                          <ToggleLeft className="w-3 h-3 mr-1" />
+                          Inactive
+                        </>
+                      )}
                     </button>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -298,7 +344,7 @@ const AdminUsersPage: React.FC = () => {
             <Users className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No users found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchTerm || filterRole || filterTenant
+              {searchTerm || filterRole || filterTenant || filterStatus !== 'all'
                 ? 'Try adjusting your search filters.'
                 : 'Get started by adding your first user.'}
             </p>
