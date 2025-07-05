@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../../firebase/config';
 import { 
   Building2, 
   Eye, 
@@ -13,14 +11,13 @@ import {
   CheckCircle,
   ArrowRight
 } from 'lucide-react';
-import { UserRole, Tenant, SubscriptionPlan, SubscriptionStatus } from '../../types';
 
 const AgencyRegistration: React.FC = () => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     // Agency Info
-    agencyName: '',
-    agencyDomain: '',
+    name: '',
+    domain: '',
     contactEmail: '',
     contactPhone: '',
     address: '',
@@ -43,7 +40,7 @@ const AgencyRegistration: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const { register } = useAuth();
+  const { registerAgency } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -66,7 +63,7 @@ const AgencyRegistration: React.FC = () => {
   };
 
   const validateStep1 = () => {
-    if (!formData.agencyName || !formData.contactEmail || !formData.contactPhone) {
+    if (!formData.name || !formData.contactEmail || !formData.contactPhone) {
       setError('Please fill in all required agency information.');
       return false;
     }
@@ -131,59 +128,22 @@ const AgencyRegistration: React.FC = () => {
     setError('');
 
     try {
-      // Create tenant first
-      const tenantData: Omit<Tenant, 'id'> = {
-        name: formData.agencyName,
-        domain: formData.agencyDomain || undefined,
-        isActive: true,
-        createdBy: 'self-registration',
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
-        settings: {
-          allowedModules: formData.selectedModules,
-          maxUsers: 5, // Default for trial
-          customBranding: false
-        },
-        contactInfo: {
-          email: formData.contactEmail,
-          phone: formData.contactPhone,
-          address: formData.address
-        }
+      const agencyData = {
+        name: formData.name,
+        domain: formData.domain,
+        contactEmail: formData.contactEmail,
+        contactPhone: formData.contactPhone,
+        address: formData.address,
+        selectedModules: formData.selectedModules
       };
 
-      const tenantRef = await addDoc(collection(db, 'tenants'), tenantData);
-
-      // Create trial subscription
-      const subscriptionData = {
-        tenantId: tenantRef.id,
-        plan: SubscriptionPlan.TRIAL,
-        status: SubscriptionStatus.TRIAL,
-        startDate: Timestamp.now(),
-        endDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // 30 days
-        trialEndDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
-        amount: 0,
-        currency: 'INR',
-        autoRenew: false,
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now()
-      };
-
-      const subscriptionRef = await addDoc(collection(db, 'subscriptions'), subscriptionData);
-
-      // Update tenant with subscription ID
-      await addDoc(collection(db, 'tenants'), {
-        ...tenantData,
-        subscriptionId: subscriptionRef.id
-      });
-
-      // Register admin user
-      await register(formData.adminEmail, formData.password, {
+      const adminData = {
         name: formData.adminName,
-        role: UserRole.TENANT_ADMIN,
-        tenantId: tenantRef.id,
-        createdBy: 'self-registration'
-      });
+        email: formData.adminEmail,
+        password: formData.password
+      };
 
+      await registerAgency(agencyData, adminData);
       navigate('/dashboard');
     } catch (error: any) {
       console.error('Registration error:', error);
@@ -286,9 +246,9 @@ const AgencyRegistration: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    name="agencyName"
+                    name="name"
                     required
-                    value={formData.agencyName}
+                    value={formData.name}
                     onChange={handleChange}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
                     placeholder="Your Agency Name"
@@ -301,8 +261,8 @@ const AgencyRegistration: React.FC = () => {
                   </label>
                   <input
                     type="text"
-                    name="agencyDomain"
-                    value={formData.agencyDomain}
+                    name="domain"
+                    value={formData.domain}
                     onChange={handleChange}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
                     placeholder="youragency.com"

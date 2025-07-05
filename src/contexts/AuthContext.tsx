@@ -14,7 +14,8 @@ import {
   query, 
   where, 
   getDocs,
-  Timestamp 
+  Timestamp,
+  updateDoc 
 } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { 
@@ -36,6 +37,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, userData: Partial<UserProfile>) => Promise<void>;
+  registerAgency: (agencyData: any, adminData: any) => Promise<void>;
   logout: () => Promise<void>;
   hasPermission: (permission: Permission) => boolean;
   isRole: (role: UserRole) => boolean;
@@ -103,6 +105,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Load subscription if tenant has one
         if (tenant.subscriptionId) {
           await loadSubscription(tenant.subscriptionId);
+        } else {
+          // Look for subscription by tenantId
+          const subscriptionsQuery = query(
+            collection(db, 'subscriptions'),
+            where('tenantId', '==', tenantId)
+          );
+          const subscriptionsSnapshot = await getDocs(subscriptionsQuery);
+          if (!subscriptionsSnapshot.empty) {
+            const subscription = {
+              id: subscriptionsSnapshot.docs[0].id,
+              ...subscriptionsSnapshot.docs[0].data()
+            } as Subscription;
+            setCurrentSubscription(subscription);
+          }
         }
       }
     } catch (error) {
@@ -128,9 +144,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Update last login
       if (result.user) {
-        await setDoc(doc(db, 'users', result.user.uid), {
+        await updateDoc(doc(db, 'users', result.user.uid), {
           lastLogin: Timestamp.now()
-        }, { merge: true });
+        });
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -149,7 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: userData.role || UserRole.TENANT_ADMIN,
         tenantId: userData.tenantId,
         permissions: ROLE_PERMISSIONS[userData.role || UserRole.TENANT_ADMIN],
-        isActive: true,
+        isActive: true, // Always set to true for new registrations
         createdBy: userData.createdBy,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
@@ -159,6 +175,79 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await setDoc(doc(db, 'users', result.user.uid), userProfile);
     } catch (error) {
       console.error('Registration error:', error);
+      throw error;
+    }
+  };
+
+  const registerAgency = async (agencyData: any, adminData: any) => {
+    try {
+      // Create admin user first
+      const result = await createUserWithEmailAndPassword(auth, adminData.email, adminData.password);
+      
+      // Create tenant
+      const tenantData: Omit<Tenant, 'id'> = {
+        name: agencyData.name,
+        domain: agencyData.domain || undefined,
+        isActive: true,
+        createdBy: result.user.uid,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        settings: {
+          allowedModules: agencyData.selectedModules,
+          maxUsers: 5, // Default for trial
+          customBranding: false
+        },
+        contactInfo: {
+          email: agencyData.contactEmail,
+          phone: agencyData.contactPhone,
+          address: agencyData.address
+        }
+      };
+
+      const tenantRef = await setDoc(doc(collection(db, 'tenants')), tenantData);
+      const tenantId = tenantRef.id;
+
+      // Create trial subscription
+      const subscriptionData = {
+        tenantId: tenantId,
+        plan: SubscriptionPlan.TRIAL,
+        status: SubscriptionStatus.TRIAL,
+        startDate: Timestamp.now(),
+        endDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // 30 days
+        trialEndDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+        amount: 0,
+        currency: 'INR',
+        autoRenew: false,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now()
+      };
+
+      const subscriptionRef = await setDoc(doc(collection(db, 'subscriptions')), subscriptionData);
+
+      // Update tenant with subscription ID
+      await updateDoc(doc(db, 'tenants', tenantId), {
+        subscriptionId: subscriptionRef.id
+      });
+
+      // Create admin user profile
+      const userProfile: Omit<UserProfile, 'id'> = {
+        uid: result.user.uid,
+        email: result.user.email!,
+        name: adminData.name,
+        role: UserRole.TENANT_ADMIN,
+        tenantId: tenantId,
+        permissions: ROLE_PERMISSIONS[UserRole.TENANT_ADMIN],
+        isActive: true, // Always set to true for agency registration
+        createdBy: 'self-registration',
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        lastLogin: Timestamp.now()
+      };
+
+      await setDoc(doc(db, 'users', result.user.uid), userProfile);
+
+    } catch (error) {
+      console.error('Agency registration error:', error);
       throw error;
     }
   };
@@ -212,6 +301,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     login,
     register,
+    registerAgency,
     logout,
     hasPermission,
     isRole,
