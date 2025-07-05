@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
 import SuperAdminDashboard from './SuperAdminDashboard';
-import ClientDashboard from './ClientDashboard';
+import ClientDashboard from './Dashboard/ClientDashboard';
 import AgencyDashboard from '../components/Dashboard/AgencyDashboard';
 
 const DashboardPage: React.FC = () => {
