@@ -1,0 +1,39 @@
+/* Path: src/index.css */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* * This section defines your custom fonts.
+ * It tells the browser where to find the font files in your public/fonts/ directory.
+ */
+@font-face {
+  font-family: 'Gustavo_Regular';
+  src: url('/fonts/Gustavo_Regular.woff2') format('woff2'),
+       url('/fonts/Gustavo_Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap; /* This is a performance best practice */
+}
+
+@font-face {
+  font-family: 'Poppins';
+  src: url('/fonts/Poppins-Regular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+/* * This section applies your fonts to the website.
+ */
+
+/* This sets the default font for the entire site to "Poppins" */
+:root, html {
+  font-family: "Poppins", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/* This sets the font for your main headings to "Gustavo_Regular" */
+h1, h2, h3, h5 {
+  font-family: "Gustavo_Regular", Arial, sans-serif;
+}
