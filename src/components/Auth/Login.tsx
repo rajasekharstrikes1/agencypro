@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Eye, EyeOff, Building2, Users, TrendingUp, Shield } from 'lucide-react';
@@ -10,8 +10,16 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const { login } = useAuth();
+  const { login, currentUser, userProfile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect to dashboard when user is authenticated and profile is loaded
+  useEffect(() => {
+    if (currentUser && userProfile && !authLoading) {
+      console.log('User authenticated, redirecting to dashboard');
+      navigate('/dashboard');
+    }
+  }, [currentUser, userProfile, authLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,15 +27,62 @@ const Login: React.FC = () => {
     try {
       setError('');
       setLoading(true);
+      console.log('Starting login process for:', email);
       await login(email, password);
-      navigate('/dashboard');
+      // Don't navigate here - let the useEffect handle it after profile loads
     } catch (error: any) {
-      setError('Failed to log in. Please check your credentials.');
       console.error('Login error:', error);
+      
+      // Handle specific Firebase auth errors
+      let errorMessage = 'Failed to log in. Please check your credentials.';
+      
+      if (error?.code) {
+        switch (error.code) {
+          case 'auth/user-not-found':
+            errorMessage = 'No account found with this email address.';
+            break;
+          case 'auth/wrong-password':
+            errorMessage = 'Incorrect password. Please try again.';
+            break;
+          case 'auth/invalid-email':
+            errorMessage = 'Please enter a valid email address.';
+            break;
+          case 'auth/user-disabled':
+            errorMessage = 'This account has been disabled. Please contact support.';
+            break;
+          case 'auth/too-many-requests':
+            errorMessage = 'Too many failed login attempts. Please try again later.';
+            break;
+          case 'auth/network-request-failed':
+            errorMessage = 'Network error. Please check your connection and try again.';
+            break;
+          default:
+            errorMessage = `Login failed: ${error.code}`;
+        }
+      } else if (error?.message?.includes('No document to update')) {
+        errorMessage = 'Account setup incomplete. Please contact your administrator.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  // Show loading state while authenticating
+  if (authLoading && currentUser) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary via-gray-900 to-primary flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Signing you in...</h2>
+            <p className="text-gray-600">Please wait while we load your dashboard</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary via-gray-900 to-primary flex">
@@ -163,10 +218,10 @@ const Login: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || authLoading}
                 className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-primary hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? (
+                {loading || authLoading ? (
                   <div className="flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Signing in...
