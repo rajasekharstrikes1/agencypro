@@ -123,6 +123,37 @@ const AgencyRegistration: React.FC = () => {
     }
   };
 
+  const getErrorMessage = (error: any): string => {
+    // Handle Firebase Auth errors
+    if (error?.code) {
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          return 'This email address is already registered. Please use a different email or sign in instead.';
+        case 'auth/weak-password':
+          return 'Password is too weak. Please choose a stronger password.';
+        case 'auth/invalid-email':
+          return 'Please enter a valid email address.';
+        case 'auth/operation-not-allowed':
+          return 'Email/password accounts are not enabled. Please contact support.';
+        default:
+          return `Authentication error: ${error.code}`;
+      }
+    }
+
+    // Handle permission errors
+    if (error?.message?.includes('Missing or insufficient permissions')) {
+      return 'Registration is temporarily unavailable due to system configuration. Please try again later or contact support.';
+    }
+
+    // Handle network errors
+    if (error?.message?.includes('network')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+
+    // Default error message
+    return error?.message || 'Failed to register agency. Please try again.';
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     setError('');
@@ -147,7 +178,8 @@ const AgencyRegistration: React.FC = () => {
       navigate('/dashboard');
     } catch (error: any) {
       console.error('Registration error:', error);
-      setError(error.message || 'Failed to register agency. Please try again.');
+      const errorMessage = getErrorMessage(error);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
