@@ -61,7 +61,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -73,7 +72,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await loadUserProfile(user.uid);
         } catch (error) {
           console.error('Error loading user profile:', error);
-          // Don't set loading to false here, let it complete the flow
+          setUserProfile(null);
+          setCurrentTenant(null);
+          setCurrentSubscription(null);
         }
       } else {
         setUserProfile(null);
@@ -81,14 +82,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentSubscription(null);
       }
       
-      if (initializing) {
-        setInitializing(false);
-      }
       setLoading(false);
     });
 
     return unsubscribe;
-  }, [initializing]);
+  }, []);
 
   const loadUserProfile = async (uid: string) => {
     try {
@@ -103,14 +101,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Load tenant if user belongs to one
         if (profile.tenantId) {
           await loadTenant(profile.tenantId);
+        } else {
+          // For super admin or users without tenant
+          setCurrentTenant(null);
+          setCurrentSubscription(null);
         }
       } else {
         console.log('No user profile found for:', uid);
         setUserProfile(null);
+        setCurrentTenant(null);
+        setCurrentSubscription(null);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
-      setUserProfile(null);
+      throw error;
     }
   };
 
@@ -140,15 +144,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               ...subscriptionsSnapshot.docs[0].data()
             } as Subscription;
             setCurrentSubscription(subscription);
+          } else {
+            setCurrentSubscription(null);
           }
         }
       } else {
         console.log('No tenant found for:', tenantId);
         setCurrentTenant(null);
+        setCurrentSubscription(null);
       }
     } catch (error) {
       console.error('Error loading tenant:', error);
       setCurrentTenant(null);
+      setCurrentSubscription(null);
     }
   };
 
@@ -173,7 +181,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     try {
-      setLoading(true);
       console.log('Attempting login for:', email);
       
       const result = await signInWithEmailAndPassword(auth, email, password);
@@ -181,29 +188,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // Update last login only if user document exists
       if (result.user) {
-        const userDocRef = doc(db, 'users', result.user.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (userDoc.exists()) {
-          await updateDoc(userDocRef, {
-            lastLogin: Timestamp.now()
-          });
-          console.log('Last login updated');
-        } else {
-          console.log('User document does not exist, skipping last login update');
+        try {
+          const userDocRef = doc(db, 'users', result.user.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          if (userDoc.exists()) {
+            await updateDoc(userDocRef, {
+              lastLogin: Timestamp.now()
+            });
+            console.log('Last login updated');
+          } else {
+            console.log('User document does not exist, skipping last login update');
+          }
+        } catch (updateError) {
+          console.warn('Failed to update last login, but login was successful:', updateError);
+          // Don't throw here, login was successful
         }
       }
     } catch (error) {
       console.error('Login error:', error);
-      setLoading(false);
       throw error;
     }
-    // Don't set loading to false here, let the auth state change handle it
   };
 
   const register = async (email: string, password: string, userData: Partial<UserProfile>) => {
     try {
-      setLoading(true);
       console.log('Attempting registration for:', email);
       
       const result = await createUserWithEmailAndPassword(auth, email, password);
@@ -227,15 +236,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('User profile created');
     } catch (error) {
       console.error('Registration error:', error);
-      setLoading(false);
       throw error;
     }
-    // Don't set loading to false here, let the auth state change handle it
   };
 
   const registerAgency = async (agencyData: any, adminData: any) => {
     try {
-      setLoading(true);
       console.log('Attempting agency registration for:', adminData.email);
       
       // Create admin user first
@@ -311,15 +317,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     } catch (error) {
       console.error('Agency registration error:', error);
-      setLoading(false);
       throw error;
     }
-    // Don't set loading to false here, let the auth state change handle it
   };
 
   const logout = async () => {
     try {
-      setLoading(true);
       await signOut(auth);
       setCurrentUser(null);
       setUserProfile(null);
@@ -328,8 +331,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Logout error:', error);
       throw error;
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -366,7 +367,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userProfile,
     currentTenant,
     currentSubscription,
-    loading: loading || initializing,
+    loading,
     login,
     register,
     registerAgency,

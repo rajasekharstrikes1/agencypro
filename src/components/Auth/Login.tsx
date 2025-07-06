@@ -16,8 +16,8 @@ const Login: React.FC = () => {
   // Redirect to dashboard when user is authenticated and profile is loaded
   useEffect(() => {
     if (currentUser && userProfile && !authLoading) {
-      console.log('User authenticated, redirecting to dashboard');
-      navigate('/dashboard');
+      console.log('User authenticated and profile loaded, redirecting to dashboard');
+      navigate('/dashboard', { replace: true });
     }
   }, [currentUser, userProfile, authLoading, navigate]);
 
@@ -29,7 +29,7 @@ const Login: React.FC = () => {
       setLoading(true);
       console.log('Starting login process for:', email);
       await login(email, password);
-      // Don't navigate here - let the useEffect handle it after profile loads
+      // Navigation will be handled by useEffect after profile loads
     } catch (error: any) {
       console.error('Login error:', error);
       
@@ -56,6 +56,9 @@ const Login: React.FC = () => {
           case 'auth/network-request-failed':
             errorMessage = 'Network error. Please check your connection and try again.';
             break;
+          case 'auth/invalid-credential':
+            errorMessage = 'Invalid credentials. Please check your email and password.';
+            break;
           default:
             errorMessage = `Login failed: ${error.code}`;
         }
@@ -69,15 +72,15 @@ const Login: React.FC = () => {
     }
   };
 
-  // Show loading state while authenticating
-  if (authLoading && currentUser) {
+  // Show loading state while authenticating or loading profile
+  if ((authLoading && currentUser) || (currentUser && !userProfile && !error)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary via-gray-900 to-primary flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full mx-4">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Signing you in...</h2>
-            <p className="text-gray-600">Please wait while we load your dashboard</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">Loading Dashboard...</h2>
+            <p className="text-gray-600">Please wait while we set up your workspace</p>
           </div>
         </div>
       </div>
