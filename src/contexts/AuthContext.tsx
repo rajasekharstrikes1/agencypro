@@ -142,11 +142,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       
-      // Update last login
+      // Update last login only if user document exists
       if (result.user) {
-        await updateDoc(doc(db, 'users', result.user.uid), {
-          lastLogin: Timestamp.now()
-        });
+        const userDocRef = doc(db, 'users', result.user.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          await updateDoc(userDocRef, {
+            lastLogin: Timestamp.now()
+          });
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
