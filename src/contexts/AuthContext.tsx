@@ -61,45 +61,67 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      console.log('Auth state changed:', user?.uid);
       setCurrentUser(user);
+      
       if (user) {
-        await loadUserProfile(user.uid);
+        try {
+          await loadUserProfile(user.uid);
+        } catch (error) {
+          console.error('Error loading user profile:', error);
+          // Don't set loading to false here, let it complete the flow
+        }
       } else {
         setUserProfile(null);
         setCurrentTenant(null);
         setCurrentSubscription(null);
       }
+      
+      if (initializing) {
+        setInitializing(false);
+      }
       setLoading(false);
     });
 
     return unsubscribe;
-  }, []);
+  }, [initializing]);
 
   const loadUserProfile = async (uid: string) => {
     try {
+      console.log('Loading user profile for:', uid);
       const userDoc = await getDoc(doc(db, 'users', uid));
+      
       if (userDoc.exists()) {
         const profile = { id: userDoc.id, ...userDoc.data() } as UserProfile;
+        console.log('User profile loaded:', profile);
         setUserProfile(profile);
 
         // Load tenant if user belongs to one
         if (profile.tenantId) {
           await loadTenant(profile.tenantId);
         }
+      } else {
+        console.log('No user profile found for:', uid);
+        setUserProfile(null);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
+      setUserProfile(null);
     }
   };
 
   const loadTenant = async (tenantId: string) => {
     try {
+      console.log('Loading tenant:', tenantId);
       const tenantDoc = await getDoc(doc(db, 'tenants', tenantId));
+      
       if (tenantDoc.exists()) {
         const tenant = { id: tenantDoc.id, ...tenantDoc.data() } as Tenant;
+        console.log('Tenant loaded:', tenant);
         setCurrentTenant(tenant);
 
         // Load subscription if tenant has one
@@ -120,27 +142,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setCurrentSubscription(subscription);
           }
         }
+      } else {
+        console.log('No tenant found for:', tenantId);
+        setCurrentTenant(null);
       }
     } catch (error) {
       console.error('Error loading tenant:', error);
+      setCurrentTenant(null);
     }
   };
 
   const loadSubscription = async (subscriptionId: string) => {
     try {
+      console.log('Loading subscription:', subscriptionId);
       const subscriptionDoc = await getDoc(doc(db, 'subscriptions', subscriptionId));
+      
       if (subscriptionDoc.exists()) {
         const subscription = { id: subscriptionDoc.id, ...subscriptionDoc.data() } as Subscription;
+        console.log('Subscription loaded:', subscription);
         setCurrentSubscription(subscription);
+      } else {
+        console.log('No subscription found for:', subscriptionId);
+        setCurrentSubscription(null);
       }
     } catch (error) {
       console.error('Error loading subscription:', error);
+      setCurrentSubscription(null);
     }
   };
 
   const login = async (email: string, password: string) => {
     try {
+      setLoading(true);
+      console.log('Attempting login for:', email);
+      
       const result = await signInWithEmailAndPassword(auth, email, password);
+      console.log('Login successful for:', result.user.uid);
       
       // Update last login only if user document exists
       if (result.user) {
@@ -151,17 +188,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await updateDoc(userDocRef, {
             lastLogin: Timestamp.now()
           });
+          console.log('Last login updated');
+        } else {
+          console.log('User document does not exist, skipping last login update');
         }
       }
     } catch (error) {
       console.error('Login error:', error);
+      setLoading(false);
       throw error;
     }
+    // Don't set loading to false here, let the auth state change handle it
   };
 
   const register = async (email: string, password: string, userData: Partial<UserProfile>) => {
     try {
+      setLoading(true);
+      console.log('Attempting registration for:', email);
+      
       const result = await createUserWithEmailAndPassword(auth, email, password);
+      console.log('Registration successful for:', result.user.uid);
       
       const userProfile: Omit<UserProfile, 'id'> = {
         uid: result.user.uid,
@@ -170,7 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: userData.role || UserRole.TENANT_ADMIN,
         tenantId: userData.tenantId,
         permissions: ROLE_PERMISSIONS[userData.role || UserRole.TENANT_ADMIN],
-        isActive: true, // Always set to true for new registrations
+        isActive: true,
         createdBy: userData.createdBy,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
@@ -178,16 +224,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       await setDoc(doc(db, 'users', result.user.uid), userProfile);
+      console.log('User profile created');
     } catch (error) {
       console.error('Registration error:', error);
+      setLoading(false);
       throw error;
     }
+    // Don't set loading to false here, let the auth state change handle it
   };
 
   const registerAgency = async (agencyData: any, adminData: any) => {
     try {
+      setLoading(true);
+      console.log('Attempting agency registration for:', adminData.email);
+      
       // Create admin user first
       const result = await createUserWithEmailAndPassword(auth, adminData.email, adminData.password);
+      console.log('Admin user created:', result.user.uid);
       
       // Create tenant
       const tenantData: Omit<Tenant, 'id'> = {
@@ -199,7 +252,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAt: Timestamp.now(),
         settings: {
           allowedModules: agencyData.selectedModules,
-          maxUsers: 5, // Default for trial
+          maxUsers: 5,
           customBranding: false
         },
         contactInfo: {
@@ -209,8 +262,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       };
 
-      const tenantRef = await setDoc(doc(collection(db, 'tenants')), tenantData);
-      const tenantId = tenantRef.id;
+      const tenantDocRef = doc(collection(db, 'tenants'));
+      await setDoc(tenantDocRef, tenantData);
+      const tenantId = tenantDocRef.id;
+      console.log('Tenant created:', tenantId);
 
       // Create trial subscription
       const subscriptionData = {
@@ -218,7 +273,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         plan: SubscriptionPlan.TRIAL,
         status: SubscriptionStatus.TRIAL,
         startDate: Timestamp.now(),
-        endDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)), // 30 days
+        endDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
         trialEndDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
         amount: 0,
         currency: 'INR',
@@ -227,11 +282,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAt: Timestamp.now()
       };
 
-      const subscriptionRef = await setDoc(doc(collection(db, 'subscriptions')), subscriptionData);
+      const subscriptionDocRef = doc(collection(db, 'subscriptions'));
+      await setDoc(subscriptionDocRef, subscriptionData);
+      console.log('Subscription created:', subscriptionDocRef.id);
 
       // Update tenant with subscription ID
       await updateDoc(doc(db, 'tenants', tenantId), {
-        subscriptionId: subscriptionRef.id
+        subscriptionId: subscriptionDocRef.id
       });
 
       // Create admin user profile
@@ -242,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: UserRole.TENANT_ADMIN,
         tenantId: tenantId,
         permissions: ROLE_PERMISSIONS[UserRole.TENANT_ADMIN],
-        isActive: true, // Always set to true for agency registration
+        isActive: true,
         createdBy: 'self-registration',
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
@@ -250,15 +307,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       await setDoc(doc(db, 'users', result.user.uid), userProfile);
+      console.log('Admin user profile created');
 
     } catch (error) {
       console.error('Agency registration error:', error);
+      setLoading(false);
       throw error;
     }
+    // Don't set loading to false here, let the auth state change handle it
   };
 
   const logout = async () => {
     try {
+      setLoading(true);
       await signOut(auth);
       setCurrentUser(null);
       setUserProfile(null);
@@ -267,6 +328,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Logout error:', error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -303,7 +366,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     userProfile,
     currentTenant,
     currentSubscription,
-    loading,
+    loading: loading || initializing,
     login,
     register,
     registerAgency,
