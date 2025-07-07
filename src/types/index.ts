@@ -26,6 +26,9 @@ export interface SubscriptionPlanDetails {
   maxLeads: number;
   maxInvoices: number;
   trialDays: number;
+  isActive: boolean;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 }
 
 export interface Subscription {
@@ -41,6 +44,8 @@ export interface Subscription {
   amount: number;
   currency: string;
   autoRenew: boolean;
+  discountCode?: string;
+  discountAmount?: number;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -56,6 +61,38 @@ export interface Payment {
   status: 'pending' | 'completed' | 'failed';
   paymentDate: Timestamp;
   createdAt: Timestamp;
+}
+
+// Payment Gateway Configuration
+export interface PaymentGatewayConfig {
+  id?: string;
+  provider: 'razorpay' | 'stripe';
+  isActive: boolean;
+  testMode: boolean;
+  config: {
+    keyId: string;
+    keySecret: string;
+    webhookSecret?: string;
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Discount Management
+export interface DiscountCode {
+  id?: string;
+  code: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  maxUses?: number;
+  usedCount: number;
+  validFrom: Timestamp;
+  validUntil: Timestamp;
+  applicablePlans: SubscriptionPlan[];
+  isActive: boolean;
+  createdBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 // Role and Permission Types
@@ -75,6 +112,9 @@ export enum Permission {
   VIEW_ALL_ANALYTICS = 'view_all_analytics',
   MANAGE_SUBSCRIPTIONS = 'manage_subscriptions',
   MANAGE_PAYMENTS = 'manage_payments',
+  MANAGE_PAYMENT_GATEWAY = 'manage_payment_gateway',
+  MANAGE_DISCOUNT_CODES = 'manage_discount_codes',
+  MANAGE_SYSTEM_SETTINGS = 'manage_system_settings',
   
   // Tenant Admin permissions
   MANAGE_TENANT_USERS = 'manage_tenant_users',
@@ -282,6 +322,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.VIEW_ALL_ANALYTICS,
     Permission.MANAGE_SUBSCRIPTIONS,
     Permission.MANAGE_PAYMENTS,
+    Permission.MANAGE_PAYMENT_GATEWAY,
+    Permission.MANAGE_DISCOUNT_CODES,
+    Permission.MANAGE_SYSTEM_SETTINGS,
     Permission.MANAGE_TENANT_USERS,
     Permission.MANAGE_USERS,
     Permission.VIEW_DASHBOARD
@@ -361,7 +404,8 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlan, SubscriptionPlanDetail
     maxUsers: 2,
     maxLeads: 100,
     maxInvoices: 50,
-    trialDays: 30
+    trialDays: 30,
+    isActive: true
   },
   [SubscriptionPlan.BASIC]: {
     id: SubscriptionPlan.BASIC,
@@ -372,7 +416,8 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlan, SubscriptionPlanDetail
     maxUsers: 5,
     maxLeads: 1000,
     maxInvoices: 500,
-    trialDays: 0
+    trialDays: 0,
+    isActive: true
   },
   [SubscriptionPlan.PREMIUM]: {
     id: SubscriptionPlan.PREMIUM,
@@ -383,7 +428,8 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlan, SubscriptionPlanDetail
     maxUsers: 15,
     maxLeads: -1, // Unlimited
     maxInvoices: -1, // Unlimited
-    trialDays: 0
+    trialDays: 0,
+    isActive: true
   },
   [SubscriptionPlan.ENTERPRISE]: {
     id: SubscriptionPlan.ENTERPRISE,
@@ -394,6 +440,7 @@ export const SUBSCRIPTION_PLANS: Record<SubscriptionPlan, SubscriptionPlanDetail
     maxUsers: -1, // Unlimited
     maxLeads: -1, // Unlimited
     maxInvoices: -1, // Unlimited
-    trialDays: 0
+    trialDays: 0,
+    isActive: true
   }
 };

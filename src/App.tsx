@@ -14,6 +14,8 @@ import SettingsPage from './pages/SettingsPage';
 import AdminUsersPage from './pages/AdminUsersPage';
 import AdminTenantsPage from './pages/AdminTenantsPage';
 import AdminSubscriptionPlansPage from './pages/AdminSubscriptionPlansPage';
+import AdminPaymentGatewayPage from './pages/AdminPaymentGatewayPage';
+import AdminDiscountCodesPage from './pages/AdminDiscountCodesPage';
 import SubscriptionManagement from './pages/SubscriptionManagement';
 import { Permission } from './types';
 
@@ -53,6 +55,16 @@ const App: React.FC = () => {
                     <Route path="/admin/subscription-plans" element={
                       <ProtectedRoute requiredPermission={Permission.MANAGE_SUBSCRIPTIONS}>
                         <AdminSubscriptionPlansPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/admin/payment-gateway" element={
+                      <ProtectedRoute requiredPermission={Permission.MANAGE_PAYMENT_GATEWAY}>
+                        <AdminPaymentGatewayPage />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/admin/discount-codes" element={
+                      <ProtectedRoute requiredPermission={Permission.MANAGE_DISCOUNT_CODES}>
+                        <AdminDiscountCodesPage />
                       </ProtectedRoute>
                     } />
                     <Route path="/register" element={

@@ -43,6 +43,7 @@ interface AuthContextType {
   isRole: (role: UserRole) => boolean;
   canAccessModule: (module: 'leads' | 'invoices') => boolean;
   isSubscriptionActive: () => boolean;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -96,6 +97,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (userDoc.exists()) {
         const profile = { id: userDoc.id, ...userDoc.data() } as UserProfile;
         console.log('User profile loaded:', profile);
+        
+        // Validate user is active
+        if (!profile.isActive) {
+          console.log('User account is inactive');
+          setUserProfile(profile);
+          return;
+        }
+        
         setUserProfile(profile);
 
         // Load tenant if user belongs to one
@@ -108,9 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         console.log('No user profile found for:', uid);
-        setUserProfile(null);
-        setCurrentTenant(null);
-        setCurrentSubscription(null);
+        throw new Error('User profile not found');
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -126,32 +133,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (tenantDoc.exists()) {
         const tenant = { id: tenantDoc.id, ...tenantDoc.data() } as Tenant;
         console.log('Tenant loaded:', tenant);
+        
+        // Validate tenant is active
+        if (!tenant.isActive) {
+          console.log('Tenant is inactive');
+          setCurrentTenant(tenant);
+          setCurrentSubscription(null);
+          return;
+        }
+        
         setCurrentTenant(tenant);
 
-        // Load subscription if tenant has one
-        if (tenant.subscriptionId) {
-          await loadSubscription(tenant.subscriptionId);
-        } else {
-          // Look for subscription by tenantId
-          const subscriptionsQuery = query(
-            collection(db, 'subscriptions'),
-            where('tenantId', '==', tenantId)
-          );
-          const subscriptionsSnapshot = await getDocs(subscriptionsQuery);
-          if (!subscriptionsSnapshot.empty) {
-            const subscription = {
-              id: subscriptionsSnapshot.docs[0].id,
-              ...subscriptionsSnapshot.docs[0].data()
-            } as Subscription;
-            setCurrentSubscription(subscription);
-          } else {
-            setCurrentSubscription(null);
-          }
-        }
+        // Load subscription
+        await loadSubscription(tenantId);
       } else {
         console.log('No tenant found for:', tenantId);
-        setCurrentTenant(null);
-        setCurrentSubscription(null);
+        throw new Error('Tenant not found');
       }
     } catch (error) {
       console.error('Error loading tenant:', error);
@@ -160,22 +157,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loadSubscription = async (subscriptionId: string) => {
+  const loadSubscription = async (tenantId: string) => {
     try {
-      console.log('Loading subscription:', subscriptionId);
-      const subscriptionDoc = await getDoc(doc(db, 'subscriptions', subscriptionId));
+      console.log('Loading subscription for tenant:', tenantId);
+      const subscriptionsQuery = query(
+        collection(db, 'subscriptions'),
+        where('tenantId', '==', tenantId)
+      );
+      const subscriptionsSnapshot = await getDocs(subscriptionsQuery);
       
-      if (subscriptionDoc.exists()) {
-        const subscription = { id: subscriptionDoc.id, ...subscriptionDoc.data() } as Subscription;
+      if (!subscriptionsSnapshot.empty) {
+        const subscription = {
+          id: subscriptionsSnapshot.docs[0].id,
+          ...subscriptionsSnapshot.docs[0].data()
+        } as Subscription;
         console.log('Subscription loaded:', subscription);
         setCurrentSubscription(subscription);
       } else {
-        console.log('No subscription found for:', subscriptionId);
+        console.log('No subscription found for tenant:', tenantId);
         setCurrentSubscription(null);
       }
     } catch (error) {
       console.error('Error loading subscription:', error);
       setCurrentSubscription(null);
+    }
+  };
+
+  const refreshUserData = async () => {
+    if (currentUser) {
+      await loadUserProfile(currentUser.uid);
     }
   };
 
@@ -186,24 +196,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const result = await signInWithEmailAndPassword(auth, email, password);
       console.log('Login successful for:', result.user.uid);
       
-      // Update last login only if user document exists
-      if (result.user) {
-        try {
-          const userDocRef = doc(db, 'users', result.user.uid);
-          const userDoc = await getDoc(userDocRef);
-          
-          if (userDoc.exists()) {
-            await updateDoc(userDocRef, {
-              lastLogin: Timestamp.now()
-            });
-            console.log('Last login updated');
-          } else {
-            console.log('User document does not exist, skipping last login update');
-          }
-        } catch (updateError) {
-          console.warn('Failed to update last login, but login was successful:', updateError);
-          // Don't throw here, login was successful
-        }
+      // Update last login
+      try {
+        const userDocRef = doc(db, 'users', result.user.uid);
+        await updateDoc(userDocRef, {
+          lastLogin: Timestamp.now()
+        });
+        console.log('Last login updated');
+      } catch (updateError) {
+        console.warn('Failed to update last login:', updateError);
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -222,9 +223,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         uid: result.user.uid,
         email: result.user.email!,
         name: userData.name || '',
-        role: userData.role || UserRole.TENANT_ADMIN,
+        role: userData.role || UserRole.EMPLOYEE,
         tenantId: userData.tenantId,
-        permissions: ROLE_PERMISSIONS[userData.role || UserRole.TENANT_ADMIN],
+        permissions: ROLE_PERMISSIONS[userData.role || UserRole.EMPLOYEE],
         isActive: true,
         createdBy: userData.createdBy,
         createdAt: Timestamp.now(),
@@ -375,7 +376,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hasPermission,
     isRole,
     canAccessModule,
-    isSubscriptionActive
+    isSubscriptionActive,
+    refreshUserData
   };
 
   return (

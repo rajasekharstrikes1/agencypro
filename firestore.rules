@@ -1,0 +1,181 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().role == 'super_admin';
+    }
+    
+    function isTenantAdmin(tenantId) {
+      return isAuthenticated() && 
+             getUserData().role == 'tenant_admin' && 
+             getUserData().tenantId == tenantId;
+    }
+    
+    function isAdminOrEmployee(tenantId) {
+      return isAuthenticated() && 
+             getUserData().tenantId == tenantId &&
+             getUserData().role in ['tenant_admin', 'admin', 'employee'];
+    }
+    
+    function isClientUser(tenantId) {
+      return isAuthenticated() && 
+             getUserData().tenantId == tenantId &&
+             getUserData().role in ['client', 'client_user'];
+    }
+    
+    function belongsToTenant(tenantId) {
+      return isAuthenticated() && getUserData().tenantId == tenantId;
+    }
+    
+    function isActiveUser() {
+      return isAuthenticated() && getUserData().isActive == true;
+    }
+
+    // Users collection - Super admin and tenant admins can manage
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() || 
+        (isAdminOrEmployee(resource.data.tenantId))
+      );
+      
+      allow create: if isAuthenticated() && (
+        isSuperAdmin() || 
+        (getUserData().role in ['tenant_admin', 'admin'] && 
+         request.auth.uid != userId)
+      );
+      
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() || 
+        (getUserData().role in ['tenant_admin', 'admin'] && 
+         getUserData().tenantId == resource.data.tenantId)
+      );
+      
+      allow delete: if isSuperAdmin() || 
+        (getUserData().role in ['tenant_admin', 'admin'] && 
+         getUserData().tenantId == resource.data.tenantId &&
+         request.auth.uid != userId);
+    }
+
+    // Tenants collection - Super admin only
+    match /tenants/{tenantId} {
+      allow read, write: if isSuperAdmin();
+      allow read: if belongsToTenant(tenantId) && isActiveUser();
+    }
+
+    // Subscription Plans - Super admin only
+    match /subscription_plans/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // Subscriptions - Super admin and tenant admins
+    match /subscriptions/{subscriptionId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() || 
+        belongsToTenant(resource.data.tenantId)
+      );
+      allow write: if isSuperAdmin() || 
+        isTenantAdmin(resource.data.tenantId);
+    }
+
+    // Payment Gateway Config - Super admin only
+    match /payment_config/{configId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    // Discount Codes - Super admin only
+    match /discount_codes/{discountId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // Payments - Super admin and tenant admins
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() || 
+        belongsToTenant(resource.data.tenantId)
+      );
+      allow create: if isAuthenticated() && belongsToTenant(request.resource.data.tenantId);
+    }
+
+    // Leads - Tenant-specific access
+    match /leads/{leadId} {
+      allow read: if isActiveUser() && (
+        isSuperAdmin() || 
+        belongsToTenant(resource.data.tenantId)
+      );
+      
+      allow create: if isActiveUser() && (
+        isAdminOrEmployee(request.resource.data.tenantId) ||
+        isClientUser(request.resource.data.tenantId)
+      );
+      
+      allow update: if isActiveUser() && (
+        belongsToTenant(resource.data.tenantId) && (
+          isAdminOrEmployee(resource.data.tenantId) ||
+          (isClientUser(resource.data.tenantId) && request.auth.uid == resource.data.userId)
+        )
+      );
+      
+      allow delete: if isActiveUser() && 
+        isAdminOrEmployee(resource.data.tenantId);
+    }
+
+    // Service Options - Tenant-specific
+    match /service_options/{serviceId} {
+      allow read: if isActiveUser() && belongsToTenant(resource.data.tenantId);
+      allow write: if isActiveUser() && isAdminOrEmployee(resource.data.tenantId);
+    }
+
+    // Status Options - Tenant-specific
+    match /status_options/{statusId} {
+      allow read: if isActiveUser() && belongsToTenant(resource.data.tenantId);
+      allow write: if isActiveUser() && isAdminOrEmployee(resource.data.tenantId);
+    }
+
+    // User-specific collections (invoices, customers, settings)
+    match /users/{userId}/{collection}/{docId} {
+      allow read, write: if isAuthenticated() && (
+        request.auth.uid == userId || 
+        isSuperAdmin() ||
+        (getUserData().tenantId == get(/databases/$(database)/documents/users/$(userId)).data.tenantId &&
+         getUserData().role in ['tenant_admin', 'admin'])
+      );
+    }
+
+    // Invoice counters - User-specific
+    match /users/{userId}/invoice_counters/{counterId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // System logs - Super admin only
+    match /system_logs/{logId} {
+      allow read, write: if isSuperAdmin();
+    }
+
+    // Analytics - Tenant-specific
+    match /analytics/{analyticsId} {
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() || 
+        belongsToTenant(resource.data.tenantId)
+      );
+      allow write: if isSuperAdmin();
+    }
+
+    // Default deny all other documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

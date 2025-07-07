@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, deleteDoc, doc, updateDoc, query, orderBy, Timestamp, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../contexts/AuthContext';
-import { Lead, ServiceOption, StatusOption } from '../../types';
+import { Lead, ServiceOption, StatusOption, UserRole } from '../../types';
 import { Edit, Trash2, PlusCircle, Search } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -12,7 +12,7 @@ interface LeadListProps {
 }
 
 const LeadList: React.FC<LeadListProps> = ({ onEdit, onNew }) => {
-  const { currentUser, currentTenant } = useAuth();
+  const { currentUser, currentTenant, userProfile, isRole } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,7 +37,17 @@ const LeadList: React.FC<LeadListProps> = ({ onEdit, onNew }) => {
     setLoading(true);
     try {
       const leadsRef = collection(db, 'leads');
-      const q = query(leadsRef, where('tenantId', '==', currentTenant.id), orderBy('createdAt', 'desc'));
+      let q = query(leadsRef, where('tenantId', '==', currentTenant.id), orderBy('createdAt', 'desc'));
+      
+      // If user is a client, only show their leads
+      if (isRole(UserRole.CLIENT) || isRole(UserRole.CLIENT_USER)) {
+        q = query(leadsRef, 
+          where('tenantId', '==', currentTenant.id),
+          where('userId', '==', currentUser?.uid),
+          orderBy('createdAt', 'desc')
+        );
+      }
+      
       const querySnapshot = await getDocs(q);
       const leadsList = querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -141,6 +151,26 @@ const LeadList: React.FC<LeadListProps> = ({ onEdit, onNew }) => {
     return status ? `bg-[${status.color}] text-white` : 'bg-gray-200 text-gray-800';
   };
 
+  const canEditLead = (lead: Lead) => {
+    // Super admin can edit all leads
+    if (userProfile?.role === 'super_admin') return true;
+    
+    // Tenant admin, admin, and employee can edit all leads in their tenant
+    if (['tenant_admin', 'admin', 'employee'].includes(userProfile?.role || '')) return true;
+    
+    // Client users can only edit their own leads
+    if (['client', 'client_user'].includes(userProfile?.role || '')) {
+      return lead.userId === currentUser?.uid;
+    }
+    
+    return false;
+  };
+
+  const canDeleteLead = (lead: Lead) => {
+    // Only tenant admin, admin, and employee can delete leads
+    return ['tenant_admin', 'admin', 'employee'].includes(userProfile?.role || '');
+  };
+
   const filteredLeads = leads.filter(lead => {
     const searchLower = searchTerm.toLowerCase();
     const matchesSearch = searchTerm === '' ||
@@ -231,33 +261,47 @@ const LeadList: React.FC<LeadListProps> = ({ onEdit, onNew }) => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{lead.emailAddress}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{lead.services.join(', ')}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm min-w-[150px]">
-                    <select
-                      value={lead.leadStatus}
-                      onChange={(e) => handleStatusChange(lead.id!, e.target.value)}
-                      className={`block py-1 px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm ${getStatusColorClass(lead.leadStatus)}`}
-                      style={{ backgroundColor: availableStatuses.find(s => s.name === lead.leadStatus)?.color || 'transparent' }}
-                    >
-                      {availableStatuses.map(status => (
-                        <option key={status.id} value={status.name} style={{ backgroundColor: '#ffffff', color: '#000000' }}>{status.name}</option>
-                      ))}
-                    </select>
+                    {canEditLead(lead) ? (
+                      <select
+                        value={lead.leadStatus}
+                        onChange={(e) => handleStatusChange(lead.id!, e.target.value)}
+                        className={`block py-1 px-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-accent focus:border-accent sm:text-sm ${getStatusColorClass(lead.leadStatus)}`}
+                        style={{ backgroundColor: availableStatuses.find(s => s.name === lead.leadStatus)?.color || 'transparent' }}
+                      >
+                        {availableStatuses.map(status => (
+                          <option key={status.id} value={status.name} style={{ backgroundColor: '#ffffff', color: '#000000' }}>{status.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColorClass(lead.leadStatus)}`}>
+                        {lead.leadStatus}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={lead.notes}>{lead.notes || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <input
-                      type="date"
-                      value={lead.lastFollowUpDate || ''}
-                      onChange={(e) => handleFollowupDateChange(lead.id!, e.target.value)}
-                      className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
-                    />
+                    {canEditLead(lead) ? (
+                      <input
+                        type="date"
+                        value={lead.lastFollowUpDate || ''}
+                        onChange={(e) => handleFollowupDateChange(lead.id!, e.target.value)}
+                        className="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-accent focus:border-accent sm:text-sm"
+                      />
+                    ) : (
+                      <span>{lead.lastFollowUpDate ? format(new Date(lead.lastFollowUpDate), 'MMM dd, yyyy') : 'N/A'}</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button onClick={() => onEdit(lead)} className="text-accent hover:text-blue-900 mr-3" title="Edit Lead">
-                      <Edit className="h-5 w-5" />
-                    </button>
-                    <button onClick={() => handleDelete(lead.id!)} className="text-red-600 hover:text-red-900" title="Delete Lead">
-                      <Trash2 className="h-5 w-5" />
-                    </button>
+                    {canEditLead(lead) && (
+                      <button onClick={() => onEdit(lead)} className="text-accent hover:text-blue-900 mr-3" title="Edit Lead">
+                        <Edit className="h-5 w-5" />
+                      </button>
+                    )}
+                    {canDeleteLead(lead) && (
+                      <button onClick={() => handleDelete(lead.id!)} className="text-red-600 hover:text-red-900" title="Delete Lead">
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))

@@ -14,7 +14,9 @@ import {
   UserCog,
   Shield,
   CreditCard,
-  AlertTriangle
+  AlertTriangle,
+  Tag,
+  DollarSign
 } from 'lucide-react';
 import { Permission, UserRole, SubscriptionStatus } from '../types';
 
@@ -75,6 +77,18 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           href: '/admin/subscription-plans',
           icon: CreditCard,
           permission: Permission.MANAGE_SUBSCRIPTIONS
+        },
+        {
+          name: 'Payment Gateway',
+          href: '/admin/payment-gateway',
+          icon: DollarSign,
+          permission: Permission.MANAGE_PAYMENT_GATEWAY
+        },
+        {
+          name: 'Discount Codes',
+          href: '/admin/discount-codes',
+          icon: Tag,
+          permission: Permission.MANAGE_DISCOUNT_CODES
         }
       );
     } else {
