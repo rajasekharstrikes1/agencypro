@@ -98,17 +98,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const profile = { id: userDoc.id, ...userDoc.data() } as UserProfile;
         console.log('User profile loaded:', profile);
         
-        // Validate user is active
-        if (!profile.isActive) {
-          console.log('User account is inactive');
-          setUserProfile(profile);
-          return;
-        }
-        
         setUserProfile(profile);
 
-        // Load tenant if user belongs to one
-        if (profile.tenantId) {
+        // Load tenant if user belongs to one (not for super admin)
+        if (profile.tenantId && profile.role !== UserRole.SUPER_ADMIN) {
           await loadTenant(profile.tenantId);
         } else {
           // For super admin or users without tenant
@@ -117,11 +110,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         console.log('No user profile found for:', uid);
-        return;
+        // Don't throw error, just set to null
+        setUserProfile(null);
+        setCurrentTenant(null);
+        setCurrentSubscription(null);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
-      throw error;
+      // Don't throw error, just set to null
+      setUserProfile(null);
+      setCurrentTenant(null);
+      setCurrentSubscription(null);
     }
   };
 
@@ -133,22 +132,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (tenantDoc.exists()) {
         const tenant = { id: tenantDoc.id, ...tenantDoc.data() } as Tenant;
         console.log('Tenant loaded:', tenant);
-        
-        // Validate tenant is active
-        if (!tenant.isActive) {
-          console.log('Tenant is inactive');
-          setCurrentTenant(tenant);
-          setCurrentSubscription(null);
-          return;
-        }
-        
         setCurrentTenant(tenant);
 
         // Load subscription
         await loadSubscription(tenantId);
       } else {
         console.log('No tenant found for:', tenantId);
-        throw new Error('Tenant not found');
+        setCurrentTenant(null);
+        setCurrentSubscription(null);
       }
     } catch (error) {
       console.error('Error loading tenant:', error);

@@ -1,17 +1,15 @@
-// Path: digitalavenger/invoice/invoice-8778080b2e82e01b0e0b1db4cbffc77385999a44/src/pages/SettingsPage.tsx
-
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { useAuth } from '../contexts/AuthContext';
-import { CompanySettings, ServiceOption, StatusOption, LeadStatus } from '../types';
+import { CompanySettings, ServiceOption, StatusOption, LeadStatus, UserRole } from '../types';
 import { Save, Upload, Building, Plus, Trash2, ChevronRight, Briefcase, FileText } from 'lucide-react';
 
-type SettingsTab = 'leads' | 'invoice'; // Defined tabs
+type SettingsTab = 'leads' | 'invoice';
 
 const SettingsPage: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile, isRole } = useAuth();
   const [loading, setLoading] = useState(false);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -26,19 +24,22 @@ const SettingsPage: React.FC = () => {
   const [newServiceName, setNewServiceName] = useState('');
   const [statuses, setStatuses] = useState<StatusOption[]>([]);
   const [newStatusName, setNewStatusName] = useState('');
-  const [newStatusColor, setNewStatusColor] = useState('#000000'); // Default color for new status
+  const [newStatusColor, setNewStatusColor] = useState('#000000');
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('leads'); // Default to Leads tab first
+  const [activeTab, setActiveTab] = useState<SettingsTab>('leads');
 
   useEffect(() => {
-    fetchSettings(); // Always fetch company settings for both tabs
+    // Only show invoice settings for non-super admin users
+    if (!isRole(UserRole.SUPER_ADMIN)) {
+      fetchSettings();
+    }
+    
     if (currentUser?.uid) {
       fetchServiceOptions();
       fetchStatusOptions();
     }
-  }, [currentUser]);
+  }, [currentUser, isRole]);
 
-  // --- Company Settings (Invoice related) ---
   const fetchSettings = async () => {
     try {
       const settingsRef = collection(db, `users/${currentUser?.uid}/settings`);
@@ -121,7 +122,6 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  // --- Service Options Management (Leads related) ---
   const fetchServiceOptions = async () => {
     if (!currentUser?.uid) return;
     try {
@@ -167,7 +167,6 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  // --- Status Options Management (Leads related) ---
   const fetchStatusOptions = async () => {
     if (!currentUser?.uid) return;
     try {
@@ -178,7 +177,6 @@ const SettingsPage: React.FC = () => {
       setStatuses(statusesList);
     } catch (error) {
       console.error('Error fetching status options:', error);
-      // Fallback to hardcoded statuses if fetching fails (ensure IDs for keys)
       setStatuses([
         { id: 'default_created', name: LeadStatus.CREATED, order: 1, isDefault: true, color: '#2563EB' },
         { id: 'default_followup', name: LeadStatus.FOLLOWUP, order: 2, color: '#FBBF24' },
@@ -200,7 +198,7 @@ const SettingsPage: React.FC = () => {
         createdAt: new Date().toISOString(),
       });
       setNewStatusName('');
-      setNewStatusColor('#000000'); // Reset color picker
+      setNewStatusColor('#000000');
       fetchStatusOptions();
     } catch (error) {
       console.error('Error adding status:', error);
@@ -224,10 +222,99 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  // For super admin, only show leads settings
+  if (isRole(UserRole.SUPER_ADMIN)) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+          <div className="p-6 space-y-6">
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+              <Briefcase className="w-6 h-6 mr-2" />
+              Lead Settings
+            </h1>
+            <p className="text-gray-600 mt-1">Configure options for leads management</p>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                <Plus className="w-5 h-5 mr-2 text-primary" /> Manage Services
+              </h3>
+              <div className="flex space-x-2 mb-4">
+                <input
+                  type="text"
+                  placeholder="New service name"
+                  value={newServiceName}
+                  onChange={(e) => setNewServiceName(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-accent focus:border-accent"
+                />
+                <button type="button" onClick={handleAddService} disabled={loading || !newServiceName.trim()}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 disabled:opacity-50">
+                  Add
+                </button>
+              </div>
+              <ul className="divide-y divide-gray-200">
+                {services.map(service => (
+                  <li key={service.id} className="flex items-center justify-between py-2 text-sm text-gray-800">
+                    <span>{service.name}</span>
+                    <button type="button" onClick={() => handleDeleteService(service.id!)} disabled={loading}
+                      className="text-red-600 hover:text-red-900 disabled:opacity-50">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </li>
+                ))}
+                {services.length === 0 && <li className="py-2 text-sm text-gray-500">No custom services.</li>}
+              </ul>
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                <Plus className="w-5 h-5 mr-2 text-primary" /> Manage Lead Statuses
+              </h3>
+              <div className="flex space-x-2 mb-4">
+                <input
+                  type="text"
+                  placeholder="New status name"
+                  value={newStatusName}
+                  onChange={(e) => setNewStatusName(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-accent focus:border-accent"
+                />
+                <input
+                  type="color"
+                  value={newStatusColor}
+                  onChange={(e) => setNewStatusColor(e.target.value)}
+                  className="w-10 h-9 border border-gray-300 rounded-md shadow-sm cursor-pointer"
+                  title="Choose status color"
+                />
+                <button type="button" onClick={handleAddStatus} disabled={loading || !newStatusName.trim()}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 disabled:opacity-50">
+                  Add
+                </button>
+              </div>
+              <ul className="divide-y divide-gray-200">
+                {statuses.map(status => (
+                  <li key={status.id} className="flex items-center justify-between py-2 text-sm text-gray-800">
+                    <div className="flex items-center">
+                      <span className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: status.color || '#9E9E9E' }}></span>
+                      <span>{status.name} (Order: {status.order})</span>
+                    </div>
+                    <button type="button" onClick={() => handleDeleteStatus(status.id!)} disabled={loading}
+                      className="text-red-600 hover:text-red-900 disabled:opacity-50">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </li>
+                ))}
+                {statuses.length === 0 && <li className="py-2 text-sm text-gray-500">No custom statuses.</li>}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-6xl mx-auto flex flex-col md:flex-row"> {/* Use flex-col and md:flex-row */}
+    <div className="max-w-6xl mx-auto flex flex-col md:flex-row">
       {/* Sidebar for Settings Sections */}
-      <div className="w-full md:w-56 bg-white shadow-lg rounded-lg p-4 mb-6 md:mb-0 md:mr-6"> {/* Responsive width and margin */}
+      <div className="w-full md:w-56 bg-white shadow-lg rounded-lg p-4 mb-6 md:mb-0 md:mr-6">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Settings</h2>
         <ul>
           <li className="mb-2">
@@ -235,7 +322,7 @@ const SettingsPage: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('leads')}
               className={`flex items-center w-full px-3 py-2 rounded-md text-left font-medium transition-colors ${
-                activeTab === 'leads' ? 'bg-secondary text-primary' : 'text-gray-700 hover:bg-gray-100 hover:text-primary' // Changed to bg-secondary text-primary, hover:text-primary
+                activeTab === 'leads' ? 'bg-secondary text-primary' : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
               }`}
             >
               <Briefcase className="w-5 h-5 mr-3" />
@@ -247,7 +334,7 @@ const SettingsPage: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('invoice')}
               className={`flex items-center w-full px-3 py-2 rounded-md text-left font-medium transition-colors ${
-                activeTab === 'invoice' ? 'bg-secondary text-primary' : 'text-gray-700 hover:bg-gray-100 hover:text-primary' // Changed to bg-secondary text-primary, hover:text-primary
+                activeTab === 'invoice' ? 'bg-secondary text-primary' : 'text-gray-700 hover:bg-gray-100 hover:text-primary'
               }`}
             >
               <FileText className="w-5 h-5 mr-3" />
@@ -267,10 +354,9 @@ const SettingsPage: React.FC = () => {
             </h1>
             <p className="text-gray-600 mt-1">Configure options for your leads management</p>
 
-            {/* Dynamic Service Options Management */}
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <Plus className="w-5 h-5 mr-2 text-primary" /> Manage Services {/* Changed to text-primary */}
+                <Plus className="w-5 h-5 mr-2 text-primary" /> Manage Services
               </h3>
               <div className="flex space-x-2 mb-4">
                 <input
@@ -278,10 +364,10 @@ const SettingsPage: React.FC = () => {
                   placeholder="New service name"
                   value={newServiceName}
                   onChange={(e) => setNewServiceName(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-accent focus:border-accent" // Changed to focus:ring-accent focus:border-accent
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-accent focus:border-accent"
                 />
                 <button type="button" onClick={handleAddService} disabled={loading || !newServiceName.trim()}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 disabled:opacity-50"> {/* Changed to bg-primary, hover:bg-gray-800 */}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 disabled:opacity-50">
                   Add
                 </button>
               </div>
@@ -299,10 +385,9 @@ const SettingsPage: React.FC = () => {
               </ul>
             </div>
 
-            {/* Dynamic Lead Status Management */}
             <div className="bg-gray-50 p-4 rounded-lg">
               <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
-                <Plus className="w-5 h-5 mr-2 text-primary" /> Manage Lead Statuses {/* Changed to text-primary */}
+                <Plus className="w-5 h-5 mr-2 text-primary" /> Manage Lead Statuses
               </h3>
               <div className="flex space-x-2 mb-4">
                 <input
@@ -310,7 +395,7 @@ const SettingsPage: React.FC = () => {
                   placeholder="New status name"
                   value={newStatusName}
                   onChange={(e) => setNewStatusName(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-accent focus:border-accent" // Changed to focus:ring-accent focus:border-accent
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-accent focus:border-accent"
                 />
                 <input
                   type="color"
@@ -320,7 +405,7 @@ const SettingsPage: React.FC = () => {
                   title="Choose status color"
                 />
                 <button type="button" onClick={handleAddStatus} disabled={loading || !newStatusName.trim()}
-                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 disabled:opacity-50"> {/* Changed to bg-primary, hover:bg-gray-800 */}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 disabled:opacity-50">
                   Add
                 </button>
               </div>
@@ -372,36 +457,36 @@ const SettingsPage: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Company Name *</label>
-                <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
-                <input type="email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                <input type="email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
-                <input type="text" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                <input type="text" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
-                <input type="url" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                <input type="url" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">GST Number *</label>
-                <input type="text" required value={formData.gst} onChange={(e) => setFormData({ ...formData, gst: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                <input type="text" required value={formData.gst} onChange={(e) => setFormData({ ...formData, gst: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">PAN Number *</label>
-                <input type="text" required value={formData.pan} onChange={(e) => setFormData({ ...formData, pan: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                <input type="text" required value={formData.pan} onChange={(e) => setFormData({ ...formData, pan: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Invoice Prefix (e.g., VRI)</label>
-                <input type="text" value={formData.invoicePrefix || ''} onChange={(e) => setFormData({ ...formData, invoicePrefix: e.target.value.toUpperCase() })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" maxLength={5} /> {/* Changed to focus:ring-accent focus:border-accent */}
+                <input type="text" value={formData.invoicePrefix || ''} onChange={(e) => setFormData({ ...formData, invoicePrefix: e.target.value.toUpperCase() })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" maxLength={5} />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Address *</label>
-              <textarea required rows={3} value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+              <textarea required rows={3} value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
             </div>
 
             {/* Bank Account Details */}
@@ -410,25 +495,25 @@ const SettingsPage: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
-                  <input type="text" value={formData.bankName || ''} onChange={(e) => setFormData(prev => ({ ...prev, bankName: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                  <input type="text" value={formData.bankName || ''} onChange={(e) => setFormData(prev => ({ ...prev, bankName: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
-                  <input type="text" value={formData.accountNumber || ''} onChange={(e) => setFormData(prev => ({ ...prev, accountNumber: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                  <input type="text" value={formData.accountNumber || ''} onChange={(e) => setFormData(prev => ({ ...prev, accountNumber: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">IFSC Code</label>
-                  <input type="text" value={formData.ifscCode || ''} onChange={(e) => setFormData(prev => ({ ...prev, ifscCode: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                  <input type="text" value={formData.ifscCode || ''} onChange={(e) => setFormData(prev => ({ ...prev, ifscCode: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Branch Name</label>
-                  <input type="text" value={formData.branchName || ''} onChange={(e) => setFormData(prev => ({ ...prev, branchName: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" /> {/* Changed to focus:ring-accent focus:border-accent */}
+                  <input type="text" value={formData.branchName || ''} onChange={(e) => setFormData(prev => ({ ...prev, branchName: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-accent focus:border-accent" />
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end">
-              <button type="submit" disabled={loading} className="inline-flex items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent"> {/* Changed to bg-primary, hover:bg-gray-800, focus:ring-accent */}
+              <button type="submit" disabled={loading} className="inline-flex items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-gray-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent">
                 <Save className="w-4 h-4 mr-2" /> {loading ? 'Saving...' : 'Save Invoice Settings'}
               </button>
             </div>

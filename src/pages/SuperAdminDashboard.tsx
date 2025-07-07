@@ -13,7 +13,9 @@ import {
   AlertCircle,
   Activity,
   TrendingUp,
-  DollarSign
+  DollarSign,
+  Tag,
+  Plus
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -146,7 +148,7 @@ const SuperAdminDashboard: React.FC = () => {
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white shadow rounded-lg p-6">
+        <Link to="/admin/tenants" className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-blue-100 text-blue-600">
               <Building2 className="w-6 h-6" />
@@ -161,9 +163,9 @@ const SuperAdminDashboard: React.FC = () => {
               </p>
             </div>
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white shadow rounded-lg p-6">
+        <Link to="/admin/users" className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-green-100 text-green-600">
               <Users className="w-6 h-6" />
@@ -176,9 +178,9 @@ const SuperAdminDashboard: React.FC = () => {
               <p className="text-sm text-gray-600">Across all agencies</p>
             </div>
           </div>
-        </div>
+        </Link>
 
-        <div className="bg-white shadow rounded-lg p-6">
+        <Link to="/admin/subscription-plans" className="bg-white shadow rounded-lg p-6 hover:shadow-md transition-shadow">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-yellow-100 text-yellow-600">
               <CreditCard className="w-6 h-6" />
@@ -193,7 +195,7 @@ const SuperAdminDashboard: React.FC = () => {
               </p>
             </div>
           </div>
-        </div>
+        </Link>
 
         <div className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center">
@@ -214,7 +216,7 @@ const SuperAdminDashboard: React.FC = () => {
       {/* Quick Actions */}
       <div className="bg-white shadow rounded-lg p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Link
             to="/admin/tenants"
             className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
@@ -242,6 +244,36 @@ const SuperAdminDashboard: React.FC = () => {
             <div className="flex items-center">
               <CreditCard className="w-5 h-5 text-gray-600 mr-3" />
               <span>Subscription Plans</span>
+            </div>
+          </Link>
+
+          <Link
+            to="/admin/payment-gateway"
+            className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center">
+              <DollarSign className="w-5 h-5 text-gray-600 mr-3" />
+              <span>Payment Gateway</span>
+            </div>
+          </Link>
+
+          <Link
+            to="/admin/discount-codes"
+            className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center">
+              <Tag className="w-5 h-5 text-gray-600 mr-3" />
+              <span>Discount Codes</span>
+            </div>
+          </Link>
+
+          <Link
+            to="/register"
+            className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center">
+              <Plus className="w-5 h-5 text-gray-600 mr-3" />
+              <span>Add User</span>
             </div>
           </Link>
         </div>
