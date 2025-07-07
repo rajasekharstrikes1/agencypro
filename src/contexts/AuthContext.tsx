@@ -117,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         console.log('No user profile found for:', uid);
-        throw new Error('User profile not found');
+        return;
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
