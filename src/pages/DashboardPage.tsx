@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
-import SuperAdminDashboard from './SuperAdminDashboard';
+import SuperAdminDashboard from './Dashboard/SuperAdminDashboard';
 import ClientDashboard from './Dashboard/ClientDashboard';
 import AgencyDashboard from './Dashboard/AgencyDashboard';
 
