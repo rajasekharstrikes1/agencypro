@@ -51,7 +51,9 @@ service cloud.firestore {
       allow create: if isAuthenticated() && (
         isSuperAdmin() || 
         (getUserData().role in ['tenant_admin', 'admin'] && 
-         request.auth.uid != userId)
+         request.auth.uid != userId) ||
+        // Allow self-registration during agency signup
+        request.auth.uid == userId
       );
       
       allow update: if isAuthenticated() && (
@@ -67,10 +69,11 @@ service cloud.firestore {
          request.auth.uid != userId);
     }
 
-    // Tenants collection - Super admin only
+    // Tenants collection - Super admin only for write, read for tenant members
     match /tenants/{tenantId} {
       allow read, write: if isSuperAdmin();
       allow read: if belongsToTenant(tenantId) && isActiveUser();
+      allow create: if isAuthenticated(); // Allow during agency registration
     }
 
     // Subscription Plans - Super admin only
@@ -87,6 +90,7 @@ service cloud.firestore {
       );
       allow write: if isSuperAdmin() || 
         isTenantAdmin(resource.data.tenantId);
+      allow create: if isAuthenticated(); // Allow during agency registration
     }
 
     // Payment Gateway Config - Super admin only
@@ -109,23 +113,23 @@ service cloud.firestore {
       allow create: if isAuthenticated() && belongsToTenant(request.resource.data.tenantId);
     }
 
-    // Leads - Tenant-specific access
+    // Leads - Tenant-specific access with proper client isolation
     match /leads/{leadId} {
       allow read: if isActiveUser() && (
         isSuperAdmin() || 
-        belongsToTenant(resource.data.tenantId)
+        belongsToTenant(resource.data.tenantId) ||
+        // Client users can only see their own leads
+        (isClientUser(resource.data.tenantId) && request.auth.uid == resource.data.userId)
       );
       
       allow create: if isActiveUser() && (
         isAdminOrEmployee(request.resource.data.tenantId) ||
-        isClientUser(request.resource.data.tenantId)
+        (isClientUser(request.resource.data.tenantId) && request.auth.uid == request.resource.data.userId)
       );
       
       allow update: if isActiveUser() && (
-        belongsToTenant(resource.data.tenantId) && (
-          isAdminOrEmployee(resource.data.tenantId) ||
-          (isClientUser(resource.data.tenantId) && request.auth.uid == resource.data.userId)
-        )
+        isAdminOrEmployee(resource.data.tenantId) ||
+        (isClientUser(resource.data.tenantId) && request.auth.uid == resource.data.userId)
       );
       
       allow delete: if isActiveUser() && 

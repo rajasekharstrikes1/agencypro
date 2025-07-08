@@ -9,7 +9,11 @@ import {
   Shield, 
   Users,
   CheckCircle,
-  ArrowRight
+  ArrowRight,
+  Phone,
+  Mail,
+  User,
+  Lock
 } from 'lucide-react';
 
 const AgencyRegistration: React.FC = () => {
@@ -25,6 +29,7 @@ const AgencyRegistration: React.FC = () => {
     // Admin User Info
     adminName: '',
     adminEmail: '',
+    adminPhone: '', // Added phone number
     password: '',
     confirmPassword: '',
     
@@ -67,15 +72,45 @@ const AgencyRegistration: React.FC = () => {
       setError('Please fill in all required agency information.');
       return false;
     }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.contactEmail)) {
+      setError('Please enter a valid email address.');
+      return false;
+    }
+    
+    // Phone validation
+    const phoneRegex = /^[+]?[\d\s\-\(\)]{10,}$/;
+    if (!phoneRegex.test(formData.contactPhone)) {
+      setError('Please enter a valid phone number.');
+      return false;
+    }
+    
     setError('');
     return true;
   };
 
   const validateStep2 = () => {
-    if (!formData.adminName || !formData.adminEmail || !formData.password) {
+    if (!formData.adminName || !formData.adminEmail || !formData.adminPhone || !formData.password) {
       setError('Please fill in all admin user information.');
       return false;
     }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.adminEmail)) {
+      setError('Please enter a valid admin email address.');
+      return false;
+    }
+    
+    // Phone validation
+    const phoneRegex = /^[+]?[\d\s\-\(\)]{10,}$/;
+    if (!phoneRegex.test(formData.adminPhone)) {
+      setError('Please enter a valid admin phone number.');
+      return false;
+    }
+    
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match.');
       return false;
@@ -124,7 +159,6 @@ const AgencyRegistration: React.FC = () => {
   };
 
   const getErrorMessage = (error: any): string => {
-    // Handle Firebase Auth errors
     if (error?.code) {
       switch (error.code) {
         case 'auth/email-already-in-use':
@@ -140,17 +174,14 @@ const AgencyRegistration: React.FC = () => {
       }
     }
 
-    // Handle permission errors
     if (error?.message?.includes('Missing or insufficient permissions')) {
       return 'Registration is temporarily unavailable due to system configuration. Please try again later or contact support.';
     }
 
-    // Handle network errors
     if (error?.message?.includes('network')) {
       return 'Network error. Please check your internet connection and try again.';
     }
 
-    // Default error message
     return error?.message || 'Failed to register agency. Please try again.';
   };
 
@@ -171,6 +202,7 @@ const AgencyRegistration: React.FC = () => {
       const adminData = {
         name: formData.adminName,
         email: formData.adminEmail,
+        phone: formData.adminPhone,
         password: formData.password
       };
 
@@ -262,7 +294,8 @@ const AgencyRegistration: React.FC = () => {
 
           <div className="bg-white rounded-2xl shadow-xl p-8">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-6">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm mb-6 flex items-center">
+                <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
                 {error}
               </div>
             )}
@@ -274,6 +307,7 @@ const AgencyRegistration: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Building2 className="w-4 h-4 inline mr-1" />
                     Agency Name *
                   </label>
                   <input
@@ -303,6 +337,7 @@ const AgencyRegistration: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Mail className="w-4 h-4 inline mr-1" />
                     Contact Email *
                   </label>
                   <input
@@ -318,6 +353,7 @@ const AgencyRegistration: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Phone className="w-4 h-4 inline mr-1" />
                     Contact Phone *
                   </label>
                   <input
@@ -354,6 +390,7 @@ const AgencyRegistration: React.FC = () => {
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <User className="w-4 h-4 inline mr-1" />
                     Admin Name *
                   </label>
                   <input
@@ -369,6 +406,7 @@ const AgencyRegistration: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Mail className="w-4 h-4 inline mr-1" />
                     Admin Email *
                   </label>
                   <input
@@ -384,6 +422,23 @@ const AgencyRegistration: React.FC = () => {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Phone className="w-4 h-4 inline mr-1" />
+                    Admin Phone *
+                  </label>
+                  <input
+                    type="tel"
+                    name="adminPhone"
+                    required
+                    value={formData.adminPhone}
+                    onChange={handleChange}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent transition-colors"
+                    placeholder="+91 9876543210"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Lock className="w-4 h-4 inline mr-1" />
                     Password *
                   </label>
                   <div className="relative">
@@ -446,7 +501,7 @@ const AgencyRegistration: React.FC = () => {
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Choose Your Modules</h3>
                 
                 <div className="space-y-4">
-                  <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="border border-gray-200 rounded-lg p-4 hover:border-accent transition-colors">
                     <div className="flex items-center">
                       <input
                         type="checkbox"
@@ -464,7 +519,7 @@ const AgencyRegistration: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="border border-gray-200 rounded-lg p-4">
+                  <div className="border border-gray-200 rounded-lg p-4 hover:border-accent transition-colors">
                     <div className="flex items-center">
                       <input
                         type="checkbox"

@@ -28,6 +28,7 @@ import {
   SubscriptionStatus,
   SubscriptionPlan 
 } from '../types';
+import { useToast } from '../components/common/Toast';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -62,6 +63,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
   const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const { showToast } = useToast();
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -73,9 +75,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await loadUserProfile(user.uid);
         } catch (error) {
           console.error('Error loading user profile:', error);
+          // Don't throw error, just set states to null
           setUserProfile(null);
           setCurrentTenant(null);
           setCurrentSubscription(null);
+          showToast('error', 'Profile Loading Error', 'Failed to load user profile. Please try refreshing the page.');
         }
       } else {
         setUserProfile(null);
@@ -87,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return unsubscribe;
-  }, []);
+  }, [showToast]);
 
   const loadUserProfile = async (uid: string) => {
     try {
@@ -110,17 +114,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         console.log('No user profile found for:', uid);
-        // Don't throw error, just set to null
-        setUserProfile(null);
+        // Create a basic profile for users without one
+        const basicProfile: Omit<UserProfile, 'id'> = {
+          uid: uid,
+          email: auth.currentUser?.email || '',
+          name: auth.currentUser?.displayName || 'User',
+          role: UserRole.EMPLOYEE,
+          permissions: ROLE_PERMISSIONS[UserRole.EMPLOYEE],
+          isActive: true,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          lastLogin: Timestamp.now()
+        };
+        
+        await setDoc(doc(db, 'users', uid), basicProfile);
+        setUserProfile({ id: uid, ...basicProfile });
         setCurrentTenant(null);
         setCurrentSubscription(null);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
-      // Don't throw error, just set to null
-      setUserProfile(null);
-      setCurrentTenant(null);
-      setCurrentSubscription(null);
+      throw error;
     }
   };
 
@@ -197,8 +211,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (updateError) {
         console.warn('Failed to update last login:', updateError);
       }
+      
+      showToast('success', 'Login Successful', 'Welcome back!');
     } catch (error) {
       console.error('Login error:', error);
+      showToast('error', 'Login Failed', 'Please check your credentials and try again.');
       throw error;
     }
   };
@@ -226,8 +243,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       await setDoc(doc(db, 'users', result.user.uid), userProfile);
       console.log('User profile created');
+      showToast('success', 'Registration Successful', 'Account created successfully!');
     } catch (error) {
       console.error('Registration error:', error);
+      showToast('error', 'Registration Failed', 'Failed to create account. Please try again.');
       throw error;
     }
   };
@@ -306,9 +325,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       await setDoc(doc(db, 'users', result.user.uid), userProfile);
       console.log('Admin user profile created');
+      
+      showToast('success', 'Agency Registration Successful', 'Your agency has been created with a 30-day free trial!');
 
     } catch (error) {
       console.error('Agency registration error:', error);
+      showToast('error', 'Registration Failed', 'Failed to register agency. Please try again.');
       throw error;
     }
   };
@@ -320,8 +342,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUserProfile(null);
       setCurrentTenant(null);
       setCurrentSubscription(null);
+      showToast('success', 'Logged Out', 'You have been successfully logged out.');
     } catch (error) {
       console.error('Logout error:', error);
+      showToast('error', 'Logout Failed', 'Failed to logout. Please try again.');
       throw error;
     }
   };
