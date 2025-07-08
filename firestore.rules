@@ -40,7 +40,7 @@ service cloud.firestore {
       return isAuthenticated() && getUserData().isActive == true;
     }
 
-    // Users collection - Super admin and tenant admins can manage
+    // Users collection - Allow self-registration and management
     match /users/{userId} {
       allow read: if isAuthenticated() && (
         request.auth.uid == userId || 
@@ -49,11 +49,9 @@ service cloud.firestore {
       );
       
       allow create: if isAuthenticated() && (
+        request.auth.uid == userId || // Self-registration
         isSuperAdmin() || 
-        (getUserData().role in ['tenant_admin', 'admin'] && 
-         request.auth.uid != userId) ||
-        // Allow self-registration during agency signup
-        request.auth.uid == userId
+        (getUserData().role in ['tenant_admin', 'admin'])
       );
       
       allow update: if isAuthenticated() && (
@@ -69,11 +67,14 @@ service cloud.firestore {
          request.auth.uid != userId);
     }
 
-    // Tenants collection - Super admin only for write, read for tenant members
+    // Tenants collection - Allow creation during registration
     match /tenants/{tenantId} {
-      allow read, write: if isSuperAdmin();
-      allow read: if belongsToTenant(tenantId) && isActiveUser();
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() || 
+        belongsToTenant(tenantId)
+      );
       allow create: if isAuthenticated(); // Allow during agency registration
+      allow update, delete: if isSuperAdmin();
     }
 
     // Subscription Plans - Super admin only
@@ -82,15 +83,15 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
-    // Subscriptions - Super admin and tenant admins
+    // Subscriptions - Allow creation during registration
     match /subscriptions/{subscriptionId} {
       allow read: if isAuthenticated() && (
         isSuperAdmin() || 
         belongsToTenant(resource.data.tenantId)
       );
-      allow write: if isSuperAdmin() || 
-        isTenantAdmin(resource.data.tenantId);
       allow create: if isAuthenticated(); // Allow during agency registration
+      allow update, delete: if isSuperAdmin() || 
+        isTenantAdmin(resource.data.tenantId);
     }
 
     // Payment Gateway Config - Super admin only
@@ -117,9 +118,10 @@ service cloud.firestore {
     match /leads/{leadId} {
       allow read: if isActiveUser() && (
         isSuperAdmin() || 
-        belongsToTenant(resource.data.tenantId) ||
-        // Client users can only see their own leads
-        (isClientUser(resource.data.tenantId) && request.auth.uid == resource.data.userId)
+        (belongsToTenant(resource.data.tenantId) && (
+          isAdminOrEmployee(resource.data.tenantId) ||
+          (isClientUser(resource.data.tenantId) && request.auth.uid == resource.data.userId)
+        ))
       );
       
       allow create: if isActiveUser() && (
@@ -138,14 +140,26 @@ service cloud.firestore {
 
     // Service Options - Tenant-specific
     match /service_options/{serviceId} {
-      allow read: if isActiveUser() && belongsToTenant(resource.data.tenantId);
-      allow write: if isActiveUser() && isAdminOrEmployee(resource.data.tenantId);
+      allow read: if isActiveUser() && (
+        isSuperAdmin() ||
+        belongsToTenant(resource.data.tenantId)
+      );
+      allow write: if isActiveUser() && (
+        isSuperAdmin() ||
+        isAdminOrEmployee(resource.data.tenantId)
+      );
     }
 
     // Status Options - Tenant-specific
     match /status_options/{statusId} {
-      allow read: if isActiveUser() && belongsToTenant(resource.data.tenantId);
-      allow write: if isActiveUser() && isAdminOrEmployee(resource.data.tenantId);
+      allow read: if isActiveUser() && (
+        isSuperAdmin() ||
+        belongsToTenant(resource.data.tenantId)
+      );
+      allow write: if isActiveUser() && (
+        isSuperAdmin() ||
+        isAdminOrEmployee(resource.data.tenantId)
+      );
     }
 
     // User-specific collections (invoices, customers, settings)

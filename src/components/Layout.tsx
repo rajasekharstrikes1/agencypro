@@ -16,7 +16,8 @@ import {
   CreditCard,
   AlertTriangle,
   Tag,
-  DollarSign
+  DollarSign,
+  Zap
 } from 'lucide-react';
 import { Permission, UserRole, SubscriptionStatus } from '../types';
 
@@ -81,7 +82,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         {
           name: 'Payment Gateway',
           href: '/admin/payment-gateway',
-          icon: DollarSign,
+          icon: Zap,
           permission: Permission.MANAGE_PAYMENT_GATEWAY
         },
         {
@@ -129,7 +130,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         });
       }
 
-      // User management for tenant admins
+      // User management for tenant admins and admins
       if (hasPermission(Permission.MANAGE_TENANT_USERS)) {
         items.push({
           name: 'Team',

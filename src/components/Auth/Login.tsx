@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Eye, EyeOff, Building2, Users, TrendingUp, Shield } from 'lucide-react';
+import { Eye, EyeOff, Building2, Users, TrendingUp, Shield, AlertCircle } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -23,6 +23,11 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!email || !password) {
+      setError('Please enter both email and password.');
+      return;
+    }
     
     try {
       setError('');
@@ -167,7 +172,8 @@ const Login: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-xl p-8">
             <form className="space-y-6" onSubmit={handleSubmit}>
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center">
+                  <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
                   {error}
                 </div>
               )}
