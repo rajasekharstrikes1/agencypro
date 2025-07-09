@@ -93,7 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const basicProfile: Omit<UserProfile, 'id'> = {
         uid: user.uid,
         email: user.email || '',
-        name: user.displayName || 'User',
+        name: user.displayName || user.email?.split('@')[0] || 'User',
         role: UserRole.EMPLOYEE,
         permissions: ROLE_PERMISSIONS[UserRole.EMPLOYEE],
         isActive: true,
@@ -104,6 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       await setDoc(doc(db, 'users', user.uid), basicProfile);
       setUserProfile({ id: user.uid, ...basicProfile });
+      console.log('Basic profile created for user:', user.uid);
     } catch (error) {
       console.error('Error creating basic profile:', error);
     }

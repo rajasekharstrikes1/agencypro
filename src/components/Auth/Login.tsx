@@ -251,6 +251,22 @@ const Login: React.FC = () => {
                   </Link>
                 </p>
               </div>
+
+              {/* Demo Accounts */}
+              <div className="border-t pt-6">
+                <p className="text-sm text-gray-600 mb-4 text-center">Demo Accounts:</p>
+                <div className="space-y-2 text-xs">
+                  <div className="bg-blue-50 p-2 rounded">
+                    <strong>Super Admin:</strong> admin@vritix.com / password123
+                  </div>
+                  <div className="bg-green-50 p-2 rounded">
+                    <strong>Agency Admin:</strong> admin@agency.com / password123
+                  </div>
+                  <div className="bg-orange-50 p-2 rounded">
+                    <strong>Client:</strong> client@company.com / password123
+                  </div>
+                </div>
+              </div>
             </form>
           </div>
         </div>

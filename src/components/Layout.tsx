@@ -55,7 +55,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       name: 'Dashboard',
       href: '/dashboard',
       icon: LayoutDashboard,
-      permission: Permission.VIEW_DASHBOARD
+      show: true
     });
 
     // Super Admin specific items
@@ -65,31 +65,31 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           name: 'Agencies',
           href: '/admin/tenants',
           icon: Building2,
-          permission: Permission.MANAGE_ALL_TENANTS
+          show: true
         },
         {
           name: 'Users',
           href: '/admin/users',
           icon: UserCog,
-          permission: Permission.MANAGE_TENANT_USERS
+          show: true
         },
         {
           name: 'Subscription Plans',
           href: '/admin/subscription-plans',
           icon: CreditCard,
-          permission: Permission.MANAGE_SUBSCRIPTIONS
+          show: true
         },
         {
           name: 'Payment Gateway',
           href: '/admin/payment-gateway',
           icon: Zap,
-          permission: Permission.MANAGE_PAYMENT_GATEWAY
+          show: true
         },
         {
           name: 'Discount Codes',
           href: '/admin/discount-codes',
           icon: Tag,
-          permission: Permission.MANAGE_DISCOUNT_CODES
+          show: true
         }
       );
     } else {
@@ -99,7 +99,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           name: 'Leads',
           href: '/leads',
           icon: Briefcase,
-          permission: Permission.VIEW_LEADS
+          show: true
         });
       }
 
@@ -109,13 +109,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             name: 'Invoices',
             href: '/invoices',
             icon: FileText,
-            permission: Permission.VIEW_INVOICES
+            show: true
           },
           {
             name: 'Customers',
             href: '/customers',
             icon: Users,
-            permission: Permission.VIEW_CUSTOMERS
+            show: true
           }
         );
       }
@@ -126,7 +126,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           name: 'Subscription',
           href: '/subscription',
           icon: CreditCard,
-          permission: Permission.MANAGE_TENANT_SETTINGS
+          show: true
         });
       }
 
@@ -136,7 +136,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           name: 'Team',
           href: '/admin/users',
           icon: UserCog,
-          permission: Permission.MANAGE_TENANT_USERS
+          show: true
         });
       }
     }
@@ -146,10 +146,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       name: 'Settings',
       href: '/settings',
       icon: Settings,
-      permission: null
+      show: true
     });
 
-    return items.filter(item => !item.permission || hasPermission(item.permission));
+    return items.filter(item => item.show);
   };
 
   const navigationItems = getNavigationItems();
