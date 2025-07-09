@@ -13,7 +13,8 @@ import {
   Phone,
   Mail,
   User,
-  Lock
+  Lock,
+  AlertCircle
 } from 'lucide-react';
 
 const AgencyRegistration: React.FC = () => {
@@ -29,7 +30,7 @@ const AgencyRegistration: React.FC = () => {
     // Admin User Info
     adminName: '',
     adminEmail: '',
-    adminPhone: '', // Added phone number
+    adminPhone: '',
     password: '',
     confirmPassword: '',
     

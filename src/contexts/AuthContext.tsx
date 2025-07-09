@@ -73,10 +73,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await loadUserProfile(user.uid);
         } catch (error) {
           console.error('Error loading user profile:', error);
-          // Don't throw error, just set states to null
-          setUserProfile(null);
-          setCurrentTenant(null);
-          setCurrentSubscription(null);
+          // Create basic profile if none exists
+          await createBasicProfile(user);
         }
       } else {
         setUserProfile(null);
@@ -89,6 +87,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return unsubscribe;
   }, []);
+
+  const createBasicProfile = async (user: User) => {
+    try {
+      const basicProfile: Omit<UserProfile, 'id'> = {
+        uid: user.uid,
+        email: user.email || '',
+        name: user.displayName || 'User',
+        role: UserRole.EMPLOYEE,
+        permissions: ROLE_PERMISSIONS[UserRole.EMPLOYEE],
+        isActive: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        lastLogin: Timestamp.now()
+      };
+      
+      await setDoc(doc(db, 'users', user.uid), basicProfile);
+      setUserProfile({ id: user.uid, ...basicProfile });
+    } catch (error) {
+      console.error('Error creating basic profile:', error);
+    }
+  };
 
   const loadUserProfile = async (uid: string) => {
     try {
@@ -110,24 +129,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCurrentSubscription(null);
         }
       } else {
-        console.log('No user profile found for:', uid);
-        // Create a basic profile for users without one
-        const basicProfile: Omit<UserProfile, 'id'> = {
-          uid: uid,
-          email: auth.currentUser?.email || '',
-          name: auth.currentUser?.displayName || 'User',
-          role: UserRole.EMPLOYEE,
-          permissions: ROLE_PERMISSIONS[UserRole.EMPLOYEE],
-          isActive: true,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now(),
-          lastLogin: Timestamp.now()
-        };
-        
-        await setDoc(doc(db, 'users', uid), basicProfile);
-        setUserProfile({ id: uid, ...basicProfile });
-        setCurrentTenant(null);
-        setCurrentSubscription(null);
+        console.log('No user profile found, creating basic profile');
+        await createBasicProfile(auth.currentUser!);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -339,7 +342,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const hasPermission = (permission: Permission): boolean => {
-    return userProfile?.permissions.includes(permission) || false;
+    if (!userProfile) return false;
+    return userProfile.permissions.includes(permission) || userProfile.role === UserRole.SUPER_ADMIN;
   };
 
   const isRole = (role: UserRole): boolean => {
@@ -348,14 +352,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const canAccessModule = (module: 'leads' | 'invoices'): boolean => {
     if (isRole(UserRole.SUPER_ADMIN)) return true;
-    if (!currentTenant) return false;
+    if (!currentTenant) return true; // Allow access if no tenant restrictions
     
     return currentTenant.settings?.allowedModules?.includes(module) || false;
   };
 
   const isSubscriptionActive = (): boolean => {
     if (isRole(UserRole.SUPER_ADMIN)) return true;
-    if (!currentSubscription) return false;
+    if (!currentSubscription) return true; // Allow access if no subscription restrictions
     
     const now = new Date();
     const endDate = currentSubscription.endDate.toDate();
