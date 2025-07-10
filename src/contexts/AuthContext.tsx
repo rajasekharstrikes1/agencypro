@@ -73,8 +73,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await loadUserProfile(user.uid);
         } catch (error) {
           console.error('Error loading user profile:', error);
-          // Create basic profile if none exists
-          await createBasicProfile(user);
+          // Create demo profiles for testing
+          await createDemoProfile(user);
         }
       } else {
         setUserProfile(null);
@@ -88,25 +88,95 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return unsubscribe;
   }, []);
 
-  const createBasicProfile = async (user: User) => {
+  const createDemoProfile = async (user: User) => {
     try {
-      const basicProfile: Omit<UserProfile, 'id'> = {
+      let role = UserRole.EMPLOYEE;
+      let tenantId = undefined;
+      
+      // Determine role based on email for demo purposes
+      if (user.email === 'admin@vritix.com') {
+        role = UserRole.SUPER_ADMIN;
+      } else if (user.email === 'admin@agency.com') {
+        role = UserRole.TENANT_ADMIN;
+        tenantId = 'demo-agency-1';
+      } else if (user.email === 'client@company.com') {
+        role = UserRole.CLIENT;
+        tenantId = 'demo-agency-1';
+      }
+
+      const profile: Omit<UserProfile, 'id'> = {
         uid: user.uid,
         email: user.email || '',
         name: user.displayName || user.email?.split('@')[0] || 'User',
-        role: UserRole.EMPLOYEE,
-        permissions: ROLE_PERMISSIONS[UserRole.EMPLOYEE],
+        role: role,
+        tenantId: tenantId,
+        permissions: ROLE_PERMISSIONS[role],
         isActive: true,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
         lastLogin: Timestamp.now()
       };
       
-      await setDoc(doc(db, 'users', user.uid), basicProfile);
-      setUserProfile({ id: user.uid, ...basicProfile });
-      console.log('Basic profile created for user:', user.uid);
+      await setDoc(doc(db, 'users', user.uid), profile);
+      setUserProfile({ id: user.uid, ...profile });
+      
+      // Create demo tenant if needed
+      if (tenantId && role !== UserRole.SUPER_ADMIN) {
+        await createDemoTenant(tenantId);
+      }
+      
+      console.log('Demo profile created for:', user.email, 'with role:', role);
     } catch (error) {
-      console.error('Error creating basic profile:', error);
+      console.error('Error creating demo profile:', error);
+    }
+  };
+
+  const createDemoTenant = async (tenantId: string) => {
+    try {
+      const tenantDoc = await getDoc(doc(db, 'tenants', tenantId));
+      if (!tenantDoc.exists()) {
+        const tenant: Omit<Tenant, 'id'> = {
+          name: 'Demo Agency',
+          domain: 'demo-agency.com',
+          isActive: true,
+          createdBy: 'system',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          settings: {
+            allowedModules: ['leads', 'invoices'],
+            maxUsers: 10,
+            customBranding: false
+          },
+          contactInfo: {
+            email: 'admin@demo-agency.com',
+            phone: '+91 9876543210',
+            address: '123 Demo Street, Demo City'
+          }
+        };
+        
+        await setDoc(doc(db, 'tenants', tenantId), tenant);
+        setCurrentTenant({ id: tenantId, ...tenant });
+        
+        // Create demo subscription
+        const subscription = {
+          tenantId: tenantId,
+          plan: SubscriptionPlan.TRIAL,
+          status: SubscriptionStatus.TRIAL,
+          startDate: Timestamp.now(),
+          endDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+          trialEndDate: Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)),
+          amount: 0,
+          currency: 'INR',
+          autoRenew: false,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        };
+        
+        await setDoc(doc(db, 'subscriptions', `${tenantId}-subscription`), subscription);
+        setCurrentSubscription({ id: `${tenantId}-subscription`, ...subscription });
+      }
+    } catch (error) {
+      console.error('Error creating demo tenant:', error);
     }
   };
 
@@ -130,8 +200,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCurrentSubscription(null);
         }
       } else {
-        console.log('No user profile found, creating basic profile');
-        await createBasicProfile(auth.currentUser!);
+        console.log('No user profile found, creating demo profile');
+        await createDemoProfile(auth.currentUser!);
       }
     } catch (error) {
       console.error('Error loading user profile:', error);
@@ -153,8 +223,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadSubscription(tenantId);
       } else {
         console.log('No tenant found for:', tenantId);
-        setCurrentTenant(null);
-        setCurrentSubscription(null);
+        await createDemoTenant(tenantId);
       }
     } catch (error) {
       console.error('Error loading tenant:', error);

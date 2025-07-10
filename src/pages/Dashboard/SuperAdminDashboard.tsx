@@ -21,7 +21,8 @@ import {
   AlertCircle,
   CheckCircle,
   Clock,
-  Zap
+  Zap,
+  ArrowRight
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -230,7 +231,7 @@ const SuperAdminDashboard: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-4">
               <Building2 className="w-8 h-8 text-blue-600 group-hover:scale-110 transition-transform" />
-              <span className="text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+              <ArrowRight className="w-5 h-5 text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <h3 className="font-semibold text-gray-900 mb-2">Manage Agencies</h3>
             <p className="text-sm text-gray-600">View and manage all registered agencies</p>
@@ -242,7 +243,7 @@ const SuperAdminDashboard: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-4">
               <CreditCard className="w-8 h-8 text-green-600 group-hover:scale-110 transition-transform" />
-              <span className="text-green-600 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+              <ArrowRight className="w-5 h-5 text-green-600 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <h3 className="font-semibold text-gray-900 mb-2">Subscription Plans</h3>
             <p className="text-sm text-gray-600">Create and manage subscription plans</p>
@@ -254,7 +255,7 @@ const SuperAdminDashboard: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-4">
               <Zap className="w-8 h-8 text-purple-600 group-hover:scale-110 transition-transform" />
-              <span className="text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+              <ArrowRight className="w-5 h-5 text-purple-600 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <h3 className="font-semibold text-gray-900 mb-2">Payment Gateway</h3>
             <p className="text-sm text-gray-600">Configure Razorpay and payment settings</p>
@@ -266,7 +267,7 @@ const SuperAdminDashboard: React.FC = () => {
           >
             <div className="flex items-center justify-between mb-4">
               <BarChart3 className="w-8 h-8 text-orange-600 group-hover:scale-110 transition-transform" />
-              <span className="text-orange-600 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+              <ArrowRight className="w-5 h-5 text-orange-600 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <h3 className="font-semibold text-gray-900 mb-2">Discount Codes</h3>
             <p className="text-sm text-gray-600">Manage promotional discount codes</p>

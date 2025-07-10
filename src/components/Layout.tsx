@@ -68,7 +68,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           show: true
         },
         {
-          name: 'Users',
+          name: 'All Users',
           href: '/admin/users',
           icon: UserCog,
           show: true
